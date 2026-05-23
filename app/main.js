@@ -8,6 +8,10 @@ const STATE = {
   TASK_PRIORITY: "task_priority",
   TASK_COMPLETE_NAME: "task_complete_name",
   TASK_COMPLETE_RESULT: "task_complete_result",
+  TASK_UPDATE_PRIORITY_NAME: "task_update_priority_name",
+  TASK_UPDATE_PRIORITY_SELECT: "task_update_priority_select",
+  TASK_UPDATE_DUE_NAME: "task_update_due_name",
+  TASK_UPDATE_DUE_DATE: "task_update_due_date",
   INSIGHT_CONTENT: "insight_content",
   INSIGHT_CATEGORY: "insight_category",
 };
@@ -362,6 +366,20 @@ function startCompleteFlow() {
   addMessage("完了にするタスク名を教えてください✅", "bot");
 }
 
+function startUpdatePriorityFlow() {
+  currentState = STATE.TASK_UPDATE_PRIORITY_NAME;
+  flowData = {};
+  setInputEnabled(true);
+  addMessage("優先度を変更するタスク名を教えてください🔄", "bot");
+}
+
+function startUpdateDueFlow() {
+  currentState = STATE.TASK_UPDATE_DUE_NAME;
+  flowData = {};
+  setInputEnabled(true);
+  addMessage("期日を変更するタスク名を教えてください📅", "bot");
+}
+
 async function showTaskList() {
   addMessage("タスク一覧", "user");
   await callChat("未完了のタスクをすべて表示して");
@@ -437,6 +455,45 @@ async function handleUserInput(text) {
     return;
   }
 
+  /* ── 優先度修正：タスク名入力 ── */
+  if (currentState === STATE.TASK_UPDATE_PRIORITY_NAME) {
+    flowData.updateTitle = text;
+    currentState = STATE.TASK_UPDATE_PRIORITY_SELECT;
+    setInputEnabled(false);
+    addBotMessageWithButtons(
+      "新しい優先度を選んでください",
+      [
+        { label: "🔴 高", value: "高", className: "priority-high" },
+        { label: "🟡 中", value: "中", className: "priority-mid" },
+        { label: "🟢 低", value: "低", className: "priority-low" },
+      ],
+      async (value) => {
+        addMessage(value, "user");
+        currentState = STATE.IDLE;
+        await callChat(`「${flowData.updateTitle}」の優先度を${value}に変更して`);
+        setInputEnabled(true);
+      }
+    );
+    return;
+  }
+
+  /* ── 期日修正：タスク名入力 ── */
+  if (currentState === STATE.TASK_UPDATE_DUE_NAME) {
+    flowData.updateTitle = text;
+    currentState = STATE.TASK_UPDATE_DUE_DATE;
+    addMessage("新しい期日を教えてください\n例）6/10\n削除する場合は「なし」と入力してください", "bot");
+    return;
+  }
+
+  /* ── 期日修正：日付入力 ── */
+  if (currentState === STATE.TASK_UPDATE_DUE_DATE) {
+    const newDue = text === "なし" ? "なし" : text;
+    currentState = STATE.IDLE;
+    await callChat(`「${flowData.updateTitle}」の期日を${newDue}に変更して`);
+    setInputEnabled(true);
+    return;
+  }
+
   /* ── 気づき入力 ── */
   if (currentState === STATE.INSIGHT_CONTENT) {
     flowData.content = text;
@@ -487,6 +544,8 @@ document.getElementById("qa-task").addEventListener("click", startTaskFlow);
 document.getElementById("qa-insight").addEventListener("click", startInsightFlow);
 document.getElementById("qa-list").addEventListener("click", showTaskList);
 document.getElementById("qa-complete").addEventListener("click", startCompleteFlow);
+document.getElementById("qa-update-priority").addEventListener("click", startUpdatePriorityFlow);
+document.getElementById("qa-update-due").addEventListener("click", startUpdateDueFlow);
 document.getElementById("qa-export").addEventListener("click", async () => {
   addMessage("気づきエクスポート", "user");
   await callChat("気づきをエクスポートして");

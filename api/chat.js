@@ -70,6 +70,22 @@ const tools = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "update_task",
+      description: "タスクの優先度や期限を変更する",
+      parameters: {
+        type: "object",
+        properties: {
+          title:    { type: "string", description: "変更するタスク名（部分一致で検索）" },
+          priority: { type: "string", enum: ["高", "中", "低"], description: "新しい優先度" },
+          due_date: { type: "string", description: "新しい期限日（YYYY-MM-DD形式）。削除する場合は 'null'" },
+        },
+        required: ["title"],
+      },
+    },
+  },
   /* ── 気づき ── */
   {
     type: "function",
@@ -197,6 +213,25 @@ async function executeTool(supabase, name, args) {
     const { error } = await supabase.from("tasks").delete().eq("id", tasks[0].id);
     if (error) throw error;
     return { success: true, title: tasks[0].title };
+  }
+
+  if (name === "update_task") {
+    const { data: tasks, error: findError } = await supabase
+      .from("tasks")
+      .select("id, title")
+      .ilike("title", `%${args.title}%`)
+      .limit(1);
+    if (findError) throw findError;
+    if (!tasks || tasks.length === 0) return { success: false, message: "タスクが見つかりませんでした" };
+    const updateData = {};
+    if (args.priority) updateData.priority = args.priority;
+    if (args.due_date !== undefined) {
+      updateData.due_date = args.due_date === "null" ? null : args.due_date;
+    }
+    if (Object.keys(updateData).length === 0) return { success: false, message: "変更する項目がありません" };
+    const { error } = await supabase.from("tasks").update(updateData).eq("id", tasks[0].id);
+    if (error) throw error;
+    return { success: true, title: tasks[0].title, updated: updateData };
   }
 
   /* ── 気づき ── */
