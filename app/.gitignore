@@ -1,0 +1,4 @@
+# 秘匿情報・ローカル設定
+.env.local
+.env.secret
+.env

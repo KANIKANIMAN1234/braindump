@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BrainDump</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="chat-wrap">
+
+    <header class="chat-header">
+      <div class="header-avatar">🤖</div>
+      <div class="header-info">
+        <div class="header-name">BrainDump</div>
+        <div class="header-sub">Supabase × OpenAI</div>
+      </div>
+    </header>
+
+    <main class="chat-body" id="chat-body">
+    </main>
+
+    <div class="quick-actions">
+      <button class="qa-btn" id="qa-task">＋ タスク追加</button>
+      <button class="qa-btn" id="qa-insight">💡 気づき追加</button>
+      <button class="qa-btn" id="qa-list">📋 タスク一覧</button>
+      <button class="qa-btn" id="qa-export">📤 気づきエクスポート</button>
+    </div>
+
+    <footer class="chat-footer">
+      <textarea
+        id="user-input"
+        class="chat-input"
+        placeholder="メッセージを入力..."
+        rows="1"
+      ></textarea>
+      <button id="send-btn" class="send-btn" aria-label="送信">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+        </svg>
+      </button>
+    </footer>
+
+  </div>
+  <script src="main.js"></script>
+</body>
+</html>

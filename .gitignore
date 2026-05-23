@@ -1,0 +1,20 @@
+# ローカル開発用
+.env
+.env.local
+.env.secret
+
+# 学習・作業用ファイル
+Day1/
+Day2/
+Day3/
+Day4/
+Day5/
+docs/
+insights/
+scripts/
+serve.py
+モックアップ/
+
+# OS・エディタ
+.DS_Store
+Thumbs.db
