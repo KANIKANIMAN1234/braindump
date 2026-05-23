@@ -157,11 +157,13 @@ function toCSV(rows) {
 async function executeTool(supabase, name, args) {
   /* ── タスク ── */
   if (name === "add_task") {
+    const validPriorities = ["高", "中", "低"];
+    const priority = validPriorities.includes(args.priority) ? args.priority : "中";
     const { error } = await supabase
       .from("tasks")
-      .insert({ title: args.title, due_date: args.due_date || null, priority: args.priority || "中" });
+      .insert({ title: args.title, due_date: args.due_date || null, priority });
     if (error) throw error;
-    return { success: true, title: args.title, due_date: args.due_date, priority: args.priority || "中" };
+    return { success: true, title: args.title, due_date: args.due_date, priority };
   }
 
   if (name === "list_tasks") {
@@ -224,7 +226,10 @@ async function executeTool(supabase, name, args) {
     if (findError) throw findError;
     if (!tasks || tasks.length === 0) return { success: false, message: "タスクが見つかりませんでした" };
     const updateData = {};
-    if (args.priority) updateData.priority = args.priority;
+    if (args.priority) {
+      const validPriorities = ["高", "中", "低"];
+      if (validPriorities.includes(args.priority)) updateData.priority = args.priority;
+    }
     if (args.due_date !== undefined) {
       updateData.due_date = args.due_date === "null" ? null : args.due_date;
     }
