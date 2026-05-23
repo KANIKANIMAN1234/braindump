@@ -6,6 +6,8 @@ const STATE = {
   TASK_NAME: "task_name",
   TASK_DUE: "task_due",
   TASK_PRIORITY: "task_priority",
+  TASK_COMPLETE_NAME: "task_complete_name",
+  TASK_COMPLETE_RESULT: "task_complete_result",
   INSIGHT_CONTENT: "insight_content",
   INSIGHT_CATEGORY: "insight_category",
 };
@@ -353,6 +355,13 @@ function startInsightFlow() {
   addMessage("気づきを入力してください📝", "bot");
 }
 
+function startCompleteFlow() {
+  currentState = STATE.TASK_COMPLETE_NAME;
+  flowData = {};
+  setInputEnabled(true);
+  addMessage("完了にするタスク名を教えてください✅", "bot");
+}
+
 async function showTaskList() {
   addMessage("タスク一覧", "user");
   await callChat("未完了のタスクをすべて表示して");
@@ -410,6 +419,24 @@ async function handleUserInput(text) {
     return;
   }
 
+  /* ── タスク完了：タスク名入力 ── */
+  if (currentState === STATE.TASK_COMPLETE_NAME) {
+    flowData.completeTitle = text;
+    currentState = STATE.TASK_COMPLETE_RESULT;
+    addMessage("どんな結果でしたか？\n「なし」でスキップもできます", "bot");
+    return;
+  }
+
+  /* ── タスク完了：結果入力 ── */
+  if (currentState === STATE.TASK_COMPLETE_RESULT) {
+    flowData.completeResult = text === "なし" ? null : text;
+    currentState = STATE.IDLE;
+    const resultPart = flowData.completeResult ? `、結果: ${flowData.completeResult}` : "";
+    await callChat(`「${flowData.completeTitle}」を完了にして${resultPart}`);
+    setInputEnabled(true);
+    return;
+  }
+
   /* ── 気づき入力 ── */
   if (currentState === STATE.INSIGHT_CONTENT) {
     flowData.content = text;
@@ -459,6 +486,7 @@ userInput.addEventListener("input", () => {
 document.getElementById("qa-task").addEventListener("click", startTaskFlow);
 document.getElementById("qa-insight").addEventListener("click", startInsightFlow);
 document.getElementById("qa-list").addEventListener("click", showTaskList);
+document.getElementById("qa-complete").addEventListener("click", startCompleteFlow);
 document.getElementById("qa-export").addEventListener("click", async () => {
   addMessage("気づきエクスポート", "user");
   await callChat("気づきをエクスポートして");

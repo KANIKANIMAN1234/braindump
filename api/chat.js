@@ -50,6 +50,7 @@ const tools = [
         type: "object",
         properties: {
           title: { type: "string", description: "完了にするタスク名（部分一致で検索）" },
+          result: { type: "string", description: "タスクの結果・成果（任意）" },
         },
         required: ["title"],
       },
@@ -178,9 +179,11 @@ async function executeTool(supabase, name, args) {
       .limit(1);
     if (findError) throw findError;
     if (!tasks || tasks.length === 0) return { success: false, message: "未完了のタスクが見つかりませんでした" };
-    const { error } = await supabase.from("tasks").update({ completed: true }).eq("id", tasks[0].id);
+    const updateData = { completed: true };
+    if (args.result) updateData.result = args.result;
+    const { error } = await supabase.from("tasks").update(updateData).eq("id", tasks[0].id);
     if (error) throw error;
-    return { success: true, title: tasks[0].title };
+    return { success: true, title: tasks[0].title, result: args.result || null };
   }
 
   if (name === "delete_task") {
