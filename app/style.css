@@ -379,3 +379,60 @@ body {
   background: #c9c9c9;
   margin: 0 0.5rem;
 }
+
+/* -------------------------------------------------------
+ * タスクリスト（色付き優先度バッジ）
+ * ----------------------------------------------------- */
+.task-list-bubble {
+  background: #fff;
+  border-radius: 10px;
+  padding: 0.5rem 0.7rem;
+  margin-top: 0.3rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.task-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.88rem;
+}
+
+.priority-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.1rem 0.45rem;
+  border-radius: 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.priority-badge-high {
+  background: #fde8e8;
+  color: #c0392b;
+}
+
+.priority-badge-mid {
+  background: #fff8e1;
+  color: #b8860b;
+}
+
+.priority-badge-low {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.task-item-title {
+  flex: 1;
+  color: #222;
+}
+
+.task-item-due {
+  font-size: 0.75rem;
+  color: #888;
+  white-space: nowrap;
+  flex-shrink: 0;
+}

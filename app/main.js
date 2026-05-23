@@ -221,6 +221,72 @@ function addBotMessageWithButtons(text, buttons, onSelect, multiSelect = false) 
 }
 
 /* -------------------------------------------------------
+ * 色付きタスクリスト表示
+ * ----------------------------------------------------- */
+function addTaskListMessage(tasks) {
+  const wrap = document.createElement("div");
+  wrap.className = "msg bot";
+
+  const av = document.createElement("div");
+  av.className = "msg-avatar";
+  av.textContent = "🤖";
+  wrap.appendChild(av);
+
+  const group = document.createElement("div");
+  group.className = "msg-bubble-group";
+
+  const intro = document.createElement("div");
+  intro.className = "msg-bubble";
+  intro.textContent = tasks.length === 0
+    ? "未完了のタスクはないよ！🎉"
+    : `未完了タスク ${tasks.length} 件だよ📋`;
+  group.appendChild(intro);
+
+  if (tasks.length > 0) {
+    const listWrap = document.createElement("div");
+    listWrap.className = "task-list-bubble";
+
+    tasks.forEach((task) => {
+      const item = document.createElement("div");
+      item.className = "task-item";
+
+      const badge = document.createElement("span");
+      const p = task.priority || "中";
+      badge.className = `priority-badge priority-badge-${p === "高" ? "high" : p === "中" ? "mid" : "low"}`;
+      badge.textContent = p;
+
+      const title = document.createElement("span");
+      title.className = "task-item-title";
+      title.textContent = task.title;
+
+      item.appendChild(badge);
+      item.appendChild(title);
+
+      if (task.due_date) {
+        const d = new Date(task.due_date);
+        const due = document.createElement("span");
+        due.className = "task-item-due";
+        due.textContent = `${d.getMonth() + 1}/${d.getDate()}まで`;
+        item.appendChild(due);
+      }
+
+      listWrap.appendChild(item);
+    });
+
+    group.appendChild(listWrap);
+  }
+
+  const time = document.createElement("div");
+  time.className = "msg-time";
+  time.textContent = nowStr();
+
+  wrap.appendChild(group);
+  wrap.appendChild(time);
+  chatBody.appendChild(wrap);
+  scrollBottom();
+}
+
+/* -------------------------------------------------------
  * API 呼び出し
  * ----------------------------------------------------- */
 async function callChat(message) {
@@ -233,7 +299,13 @@ async function callChat(message) {
     });
     const data = await res.json();
     typing.remove();
-    addMessage(res.ok ? data.reply : `エラー: ${data.error || "不明なエラー"}`, "bot");
+    if (!res.ok) {
+      addMessage(`エラー: ${data.error || "不明なエラー"}`, "bot");
+    } else if (data.tasks !== undefined) {
+      addTaskListMessage(data.tasks);
+    } else {
+      addMessage(data.reply, "bot");
+    }
   } catch (err) {
     typing.remove();
     addMessage("通信エラーが発生しました", "bot");

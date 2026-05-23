@@ -299,12 +299,16 @@ module.exports = async function handler(req, res) {
     });
 
     let assistantMessage = response.choices[0].message;
+    let taskListData = null;
 
     while (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
       messages.push(assistantMessage);
       for (const toolCall of assistantMessage.tool_calls) {
         const args = JSON.parse(toolCall.function.arguments);
         const result = await executeTool(supabase, toolCall.function.name, args);
+        if (toolCall.function.name === "list_tasks") {
+          taskListData = result.tasks;
+        }
         messages.push({ role: "tool", tool_call_id: toolCall.id, content: JSON.stringify(result) });
       }
       response = await openai.chat.completions.create({
@@ -328,7 +332,7 @@ module.exports = async function handler(req, res) {
       console.error("履歴保存エラー:", saveErr);
     }
 
-    res.status(200).json({ reply });
+    res.status(200).json({ reply, ...(taskListData !== null && { tasks: taskListData }) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
