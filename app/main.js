@@ -1,4 +1,10 @@
 /* -------------------------------------------------------
+ * LIFF 設定
+ * ----------------------------------------------------- */
+const LIFF_ID = "2010175951-S9r18QtA";
+let lineIdToken = null;
+
+/* -------------------------------------------------------
  * 状態管理
  * ----------------------------------------------------- */
 const STATE = {
@@ -25,6 +31,7 @@ let flowData = {};
 const chatBody = document.getElementById("chat-body");
 const userInput = document.getElementById("user-input");
 const sendBtn = document.getElementById("send-btn");
+const loadingOverlay = document.getElementById("loading-overlay");
 
 /* -------------------------------------------------------
  * ユーティリティ
@@ -41,6 +48,10 @@ function dateToTimeStr(dateStr) {
 
 function scrollBottom() {
   chatBody.scrollTop = chatBody.scrollHeight;
+}
+
+function authHeader() {
+  return lineIdToken ? { "Authorization": `Bearer ${lineIdToken}` } : {};
 }
 
 /* -------------------------------------------------------
@@ -300,7 +311,10 @@ async function callChat(message) {
   try {
     const res = await fetch("/api/chat", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeader(),
+      },
       body: JSON.stringify({ message }),
     });
     const data = await res.json();
@@ -323,7 +337,10 @@ async function fetchCategories(content) {
   try {
     const res = await fetch("/api/suggest-categories", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeader(),
+      },
       body: JSON.stringify({ content }),
     });
     const data = await res.json();
@@ -552,7 +569,7 @@ document.getElementById("qa-export").addEventListener("click", async () => {
 });
 
 /* -------------------------------------------------------
- * チャット履歴の読み込み（ページ初期化）
+ * チャット履歴の読み込み
  * ----------------------------------------------------- */
 function addHistorySeparator(label) {
   const sep = document.createElement("div");
@@ -563,26 +580,48 @@ function addHistorySeparator(label) {
 
 async function loadHistory() {
   try {
-    const res = await fetch("/api/messages");
+    const res = await fetch("/api/messages", {
+      headers: { ...authHeader() },
+    });
     if (!res.ok) throw new Error("fetch failed");
     const data = await res.json();
     const msgs = data.messages || [];
 
     if (msgs.length === 0) {
-      // 履歴なし → 初回挨拶
       addMessage("こんにちは！何でも話しかけてね😊", "bot");
       return;
     }
 
-    // 履歴あり → セパレーターの後に表示
     addHistorySeparator("─── 過去の会話（12時間以内）───");
     msgs.forEach((msg) => addMessage(msg.content, msg.role, msg.created_at));
     addHistorySeparator("─── ここから新しい会話 ───");
   } catch (e) {
     console.error("履歴取得エラー:", e);
-    // エラー時も初回挨拶を表示
     addMessage("こんにちは！何でも話しかけてね😊", "bot");
   }
 }
 
-loadHistory();
+/* -------------------------------------------------------
+ * LIFF 初期化（ページ起動時）
+ * ----------------------------------------------------- */
+async function initLiff() {
+  try {
+    await liff.init({ liffId: LIFF_ID });
+
+    if (!liff.isLoggedIn()) {
+      liff.login();
+      return;
+    }
+
+    lineIdToken = liff.getIDToken();
+    loadingOverlay.style.display = "none";
+    await loadHistory();
+
+  } catch (e) {
+    console.error("LIFF init error:", e);
+    loadingOverlay.style.display = "none";
+    addMessage("⚠️ 認証エラーが発生しました。LINEからアクセスしてください。", "bot");
+  }
+}
+
+initLiff();

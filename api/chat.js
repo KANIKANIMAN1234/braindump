@@ -3,6 +3,29 @@ const { createClient } = require("@supabase/supabase-js");
 const { Dropbox } = require("dropbox");
 
 /* -------------------------------------------------------
+ * LINE token 検証
+ * ----------------------------------------------------- */
+async function verifyLineToken(idToken) {
+  const params = new URLSearchParams();
+  params.append("id_token", idToken);
+  params.append("client_id", process.env.LINE_CHANNEL_ID);
+
+  const resp = await fetch("https://api.line.me/oauth2/v2.1/verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: params.toString(),
+  });
+
+  if (!resp.ok) {
+    const err = await resp.json();
+    throw new Error(`LINE token error: ${err.error_description || "invalid token"}`);
+  }
+
+  const data = await resp.json();
+  return data.sub; // LINE User ID
+}
+
+/* -------------------------------------------------------
  * ツール定義
  * ----------------------------------------------------- */
 const tools = [
@@ -154,14 +177,14 @@ function toCSV(rows) {
 /* -------------------------------------------------------
  * ツール実行
  * ----------------------------------------------------- */
-async function executeTool(supabase, name, args) {
+async function executeTool(supabase, name, args, lineUserId) {
   /* ── タスク ── */
   if (name === "add_task") {
     const validPriorities = ["高", "中", "低"];
     const priority = validPriorities.includes(args.priority) ? args.priority : "中";
     const { error } = await supabase
       .from("tasks")
-      .insert({ title: args.title, due_date: args.due_date || null, priority });
+      .insert({ title: args.title, due_date: args.due_date || null, priority, line_user_id: lineUserId });
     if (error) throw error;
     return { success: true, title: args.title, due_date: args.due_date, priority };
   }
@@ -172,6 +195,7 @@ async function executeTool(supabase, name, args) {
     let query = supabase
       .from("tasks")
       .select("id, title, due_date, completed, priority")
+      .eq("line_user_id", lineUserId)
       .order("due_date", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: true });
 
@@ -194,6 +218,7 @@ async function executeTool(supabase, name, args) {
       .select("id, title")
       .ilike("title", `%${args.title}%`)
       .eq("completed", false)
+      .eq("line_user_id", lineUserId)
       .limit(1);
     if (findError) throw findError;
     if (!tasks || tasks.length === 0) return { success: false, message: "未完了のタスクが見つかりませんでした" };
@@ -209,6 +234,7 @@ async function executeTool(supabase, name, args) {
       .from("tasks")
       .select("id, title")
       .ilike("title", `%${args.title}%`)
+      .eq("line_user_id", lineUserId)
       .limit(1);
     if (findError) throw findError;
     if (!tasks || tasks.length === 0) return { success: false, message: "タスクが見つかりませんでした" };
@@ -222,6 +248,7 @@ async function executeTool(supabase, name, args) {
       .from("tasks")
       .select("id, title")
       .ilike("title", `%${args.title}%`)
+      .eq("line_user_id", lineUserId)
       .limit(1);
     if (findError) throw findError;
     if (!tasks || tasks.length === 0) return { success: false, message: "タスクが見つかりませんでした" };
@@ -243,7 +270,7 @@ async function executeTool(supabase, name, args) {
   if (name === "add_insight") {
     const { error } = await supabase
       .from("insights")
-      .insert({ content: args.content, tags: args.tags || null });
+      .insert({ content: args.content, tags: args.tags || null, line_user_id: lineUserId });
     if (error) throw error;
     return { success: true, content: args.content };
   }
@@ -253,6 +280,7 @@ async function executeTool(supabase, name, args) {
     const { data, error } = await supabase
       .from("insights")
       .select("id, content, tags, created_at")
+      .eq("line_user_id", lineUserId)
       .order("created_at", { ascending: false })
       .limit(limit);
     if (error) throw error;
@@ -263,6 +291,7 @@ async function executeTool(supabase, name, args) {
     const { data, error } = await supabase
       .from("insights")
       .select("id, content, tags, created_at")
+      .eq("line_user_id", lineUserId)
       .is("exported_at", null)
       .order("created_at", { ascending: true });
     if (error) throw error;
@@ -275,9 +304,7 @@ async function executeTool(supabase, name, args) {
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     const filename = `insights_${date}.csv`;
 
-    const dbx = new Dropbox({
-      accessToken: process.env.DROPBOX_ACCESS_TOKEN,
-    });
+    const dbx = new Dropbox({ accessToken: process.env.DROPBOX_ACCESS_TOKEN });
 
     const dropboxPath =
       "/01_Obsidian_vault/01_AI-jissen/03_集中講座/02_supabase(2026.4)/brain-dump-app/insights";
@@ -309,6 +336,18 @@ module.exports = async function handler(req, res) {
 
   const { message } = req.body || {};
   if (!message) return res.status(400).json({ error: "message is required" });
+
+  /* ── LINE token 検証 ── */
+  const authHeader = req.headers.authorization || "";
+  const idToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!idToken) return res.status(401).json({ error: "認証が必要です（LINEからアクセスしてください）" });
+
+  let lineUserId;
+  try {
+    lineUserId = await verifyLineToken(idToken);
+  } catch (e) {
+    return res.status(401).json({ error: `認証エラー: ${e.message}` });
+  }
 
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
@@ -351,7 +390,7 @@ module.exports = async function handler(req, res) {
       messages.push(assistantMessage);
       for (const toolCall of assistantMessage.tool_calls) {
         const args = JSON.parse(toolCall.function.arguments);
-        const result = await executeTool(supabase, toolCall.function.name, args);
+        const result = await executeTool(supabase, toolCall.function.name, args, lineUserId);
         if (toolCall.function.name === "list_tasks") {
           taskListData = result.tasks;
         }
@@ -368,11 +407,11 @@ module.exports = async function handler(req, res) {
 
     const reply = assistantMessage.content;
 
-    // チャット履歴をDBに保存（失敗しても返答は返す）
+    /* チャット履歴をDBに保存（失敗しても返答は返す） */
     try {
       await supabase.from("chat_messages").insert([
-        { role: "user", content: message },
-        { role: "bot",  content: reply },
+        { role: "user", content: message, line_user_id: lineUserId },
+        { role: "bot",  content: reply,   line_user_id: lineUserId },
       ]);
     } catch (saveErr) {
       console.error("履歴保存エラー:", saveErr);
