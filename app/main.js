@@ -600,17 +600,21 @@ async function handleUserInput(text) {
 /* -------------------------------------------------------
  * 音声入力
  * ----------------------------------------------------- */
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-let recognition = null;
+let mediaRecorder = null;
+let recordingStream = null;
+let recordedChunks = [];
 let isRecording = false;
-let finalTranscript = "";
-let isStartingRecognition = false;
+let isTranscribing = false;
 let micUnavailableReason = "";
 let hasShownLiffMicHint = false;
 
+function updateInputHeight() {
+  userInput.style.height = "auto";
+  userInput.style.height = Math.min(userInput.scrollHeight, 120) + "px";
+}
+
 function resetMicUi() {
   isRecording = false;
-  isStartingRecognition = false;
   micBtn.classList.remove("recording");
   micBtn.title = "音声入力";
   userInput.placeholder = "メッセージを入力...";
@@ -624,109 +628,149 @@ function showMicUnavailable(reason) {
   micBtn.title = "音声入力はこの環境で利用できません";
 }
 
-async function ensureMicrophonePermission() {
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return true;
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  stream.getTracks().forEach((track) => track.stop());
-  return true;
+function stopRecordingStream() {
+  if (!recordingStream) return;
+  recordingStream.getTracks().forEach((track) => track.stop());
+  recordingStream = null;
 }
 
-if (SpeechRecognition) {
-  recognition = new SpeechRecognition();
-  recognition.lang = "ja-JP";
-  recognition.continuous = true;      // 無音でも自動停止しない
-  recognition.interimResults = true;  // 話している途中の結果も表示
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = String(reader.result || "");
+      const base64 = result.includes(",") ? result.split(",")[1] : result;
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
 
-  recognition.onstart = () => {
+async function transcribeAudio(blob) {
+  const audioBase64 = await blobToBase64(blob);
+  const res = await fetch("/api/transcribe", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeader(),
+    },
+    body: JSON.stringify({
+      audioBase64,
+      mimeType: blob.type || "audio/webm",
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "音声の文字起こしに失敗しました");
+  return (data.text || "").trim();
+}
+
+async function startRecording() {
+  if (isRecording || isTranscribing) return;
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showMicUnavailable("このブラウザは音声入力に対応していないため、テキスト入力をご利用ください。");
+    addMessage(micUnavailableReason, "bot");
+    return;
+  }
+
+  if (!window.MediaRecorder) {
+    showMicUnavailable("この端末は録音機能に対応していないため、テキスト入力をご利用ください。");
+    addMessage(micUnavailableReason, "bot");
+    return;
+  }
+
+  if (!hasShownLiffMicHint && typeof liff !== "undefined" && liff.isInClient()) {
+    hasShownLiffMicHint = true;
+    addMessage("LINE内ブラウザでは初回にマイク許可ダイアログが表示されます。許可してから録音してください。", "bot");
+  }
+
+  try {
+    recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(recordingStream);
+
+    mediaRecorder.addEventListener("dataavailable", (event) => {
+      if (event.data && event.data.size > 0) recordedChunks.push(event.data);
+    });
+
+    mediaRecorder.addEventListener("stop", async () => {
+      const chunkType = recordedChunks[0]?.type || "audio/webm";
+      const blob = new Blob(recordedChunks, { type: chunkType });
+      stopRecordingStream();
+      resetMicUi();
+
+      if (blob.size === 0) {
+        addMessage("録音データが取得できませんでした。もう一度お試しください。", "bot");
+        return;
+      }
+
+      isTranscribing = true;
+      userInput.placeholder = "音声を文字起こし中...";
+      try {
+        const text = await transcribeAudio(blob);
+        if (!text) {
+          addMessage("音声を認識できませんでした。もう少し大きな声でお試しください。", "bot");
+          return;
+        }
+        userInput.value = text;
+        updateInputHeight();
+        userInput.focus();
+      } catch (err) {
+        addMessage(`文字起こしに失敗しました。${err.message}`, "bot");
+      } finally {
+        isTranscribing = false;
+        userInput.placeholder = "メッセージを入力...";
+      }
+    });
+
+    mediaRecorder.start();
     isRecording = true;
-    isStartingRecognition = false;
     micBtn.classList.add("recording");
     micBtn.title = "録音中（タップで停止）";
-    userInput.placeholder = "音声を認識中...";
-  };
-
-  recognition.onresult = (event) => {
-    let interim = "";
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const text = event.results[i][0].transcript;
-      if (event.results[i].isFinal) {
-        finalTranscript += text;
-      } else {
-        interim += text;
-      }
-    }
-    userInput.value = finalTranscript + interim;
-    userInput.style.height = "auto";
-    userInput.style.height = Math.min(userInput.scrollHeight, 120) + "px";
-  };
-
-  recognition.onend = () => {
-    /* isRecording が true のままなら自動停止 → 即再起動 */
-    if (isRecording) {
-      try { recognition.start(); } catch (e) {}
-      return;
-    }
-    /* 手動停止 */
+    userInput.placeholder = "録音中...";
+  } catch (err) {
+    stopRecordingStream();
     resetMicUi();
-    if (userInput.value.trim()) userInput.focus();
-  };
-
-  recognition.onerror = (event) => {
-    if (event.error === "no-speech") return; // 無音エラーは無視して継続
-    resetMicUi();
-
-    if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-      addMessage("マイク権限が許可されていません。LINEアプリ内の権限設定をご確認ください。", "bot");
+    const errorName = err && err.name ? err.name : "unknown";
+    if (errorName === "NotAllowedError" || errorName === "SecurityError") {
+      addMessage("マイクの使用が許可されていません。LINEアプリと端末の権限設定をご確認ください。", "bot");
       return;
     }
-
-    if (event.error === "audio-capture") {
-      addMessage("マイクが見つかりません。イヤホン接続や端末設定をご確認ください。", "bot");
+    if (errorName === "NotReadableError" || errorName === "AbortError") {
+      addMessage("マイクを利用できませんでした。端末の通話中・録音中アプリを終了して再試行してください。", "bot");
       return;
     }
-
-    addMessage(`音声入力を開始できませんでした（${event.error}）。この端末ではテキスト入力をご利用ください。`, "bot");
-  };
-
-  micBtn.addEventListener("click", async () => {
-    if (micUnavailableReason) {
-      addMessage(micUnavailableReason, "bot");
-      return;
-    }
-
-    if (!hasShownLiffMicHint && typeof liff !== "undefined" && liff.isInClient()) {
-      hasShownLiffMicHint = true;
-      addMessage("LINE内ブラウザでは端末によって音声入力が使えない場合があります。動かない場合はテキスト入力をご利用ください。", "bot");
-    }
-
-    if (isRecording) {
-      isRecording = false;
-      recognition.stop();
-      return;
-    }
-
-    if (isStartingRecognition) return;
-    isStartingRecognition = true;
-
-    try {
-      await ensureMicrophonePermission();
-      finalTranscript = "";
-      userInput.value = "";
-      recognition.start();
-    } catch (err) {
-      resetMicUi();
-      const msg = (err && err.name)
-        ? `マイクの利用を開始できませんでした（${err.name}）。LINEアプリのマイク権限をご確認ください。`
-        : "マイクの利用を開始できませんでした。LINEアプリのマイク権限をご確認ください。";
-      addMessage(msg, "bot");
-    }
-  });
-} else {
-  showMicUnavailable("このブラウザは音声入力に対応していないため、テキスト入力をご利用ください。");
-  micBtn.addEventListener("click", () => {
-    addMessage(micUnavailableReason, "bot");
-  });
+    addMessage(`録音を開始できませんでした（${errorName}）。テキスト入力をご利用ください。`, "bot");
+  }
 }
+
+function stopRecording() {
+  if (!isRecording || !mediaRecorder) return;
+  try {
+    mediaRecorder.stop();
+  } catch {
+    stopRecordingStream();
+    resetMicUi();
+  }
+}
+
+if (!window.MediaRecorder) {
+  showMicUnavailable("この端末は録音機能に対応していないため、テキスト入力をご利用ください。");
+}
+
+micBtn.addEventListener("click", async () => {
+  if (micUnavailableReason) {
+    addMessage(micUnavailableReason, "bot");
+    return;
+  }
+  if (isTranscribing) {
+    addMessage("文字起こし中です。完了までお待ちください。", "bot");
+    return;
+  }
+  if (isRecording) stopRecording();
+  else await startRecording();
+});
 
 /* -------------------------------------------------------
  * イベントリスナー
