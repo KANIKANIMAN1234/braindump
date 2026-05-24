@@ -31,6 +31,7 @@ let flowData = {};
 const chatBody = document.getElementById("chat-body");
 const userInput = document.getElementById("user-input");
 const sendBtn = document.getElementById("send-btn");
+const micBtn = document.getElementById("mic-btn");
 const loadingOverlay = document.getElementById("loading-overlay");
 
 /* -------------------------------------------------------
@@ -589,6 +590,74 @@ async function handleUserInput(text) {
     );
     return;
   }
+}
+
+/* -------------------------------------------------------
+ * 音声入力
+ * ----------------------------------------------------- */
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let isRecording = false;
+
+if (SpeechRecognition) {
+  recognition = new SpeechRecognition();
+  recognition.lang = "ja-JP";
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = () => {
+    isRecording = true;
+    micBtn.classList.add("recording");
+    micBtn.title = "録音中（タップで停止）";
+    userInput.placeholder = "音声を認識中...";
+  };
+
+  recognition.onresult = (event) => {
+    let interim = "";
+    let final = "";
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const text = event.results[i][0].transcript;
+      if (event.results[i].isFinal) {
+        final += text;
+      } else {
+        interim += text;
+      }
+    }
+    userInput.value = final || interim;
+    userInput.style.height = "auto";
+    userInput.style.height = Math.min(userInput.scrollHeight, 120) + "px";
+  };
+
+  recognition.onend = () => {
+    isRecording = false;
+    micBtn.classList.remove("recording");
+    micBtn.title = "音声入力";
+    userInput.placeholder = "メッセージを入力...";
+    if (userInput.value.trim()) {
+      userInput.focus();
+    }
+  };
+
+  recognition.onerror = (event) => {
+    isRecording = false;
+    micBtn.classList.remove("recording");
+    micBtn.title = "音声入力";
+    userInput.placeholder = "メッセージを入力...";
+    if (event.error === "not-allowed") {
+      addMessage("マイクへのアクセスが許可されていません。ブラウザの設定を確認してください。", "bot");
+    }
+  };
+
+  micBtn.addEventListener("click", () => {
+    if (isRecording) {
+      recognition.stop();
+    } else {
+      userInput.value = "";
+      recognition.start();
+    }
+  });
+} else {
+  micBtn.style.display = "none";
 }
 
 /* -------------------------------------------------------

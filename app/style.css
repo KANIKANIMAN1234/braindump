@@ -376,6 +376,36 @@ body {
   cursor: not-allowed;
 }
 
+.mic-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: #e8e8e8;
+  color: #555;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.mic-btn:hover {
+  background: #d0d0d0;
+}
+
+.mic-btn.recording {
+  background: #ff4444;
+  color: #fff;
+  animation: pulse-mic 1s infinite;
+}
+
+@keyframes pulse-mic {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 68, 68, 0.5); }
+  50%       { box-shadow: 0 0 0 8px rgba(255, 68, 68, 0); }
+}
+
 @media (min-width: 500px) {
   .chat-wrap {
     height: 90dvh;
