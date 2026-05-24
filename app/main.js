@@ -604,6 +604,32 @@ const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecogni
 let recognition = null;
 let isRecording = false;
 let finalTranscript = "";
+let isStartingRecognition = false;
+let micUnavailableReason = "";
+let hasShownLiffMicHint = false;
+
+function resetMicUi() {
+  isRecording = false;
+  isStartingRecognition = false;
+  micBtn.classList.remove("recording");
+  micBtn.title = "音声入力";
+  userInput.placeholder = "メッセージを入力...";
+}
+
+function showMicUnavailable(reason) {
+  micUnavailableReason = reason;
+  micBtn.disabled = true;
+  micBtn.style.opacity = "0.45";
+  micBtn.style.cursor = "not-allowed";
+  micBtn.title = "音声入力はこの環境で利用できません";
+}
+
+async function ensureMicrophonePermission() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return true;
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  stream.getTracks().forEach((track) => track.stop());
+  return true;
+}
 
 if (SpeechRecognition) {
   recognition = new SpeechRecognition();
@@ -612,6 +638,8 @@ if (SpeechRecognition) {
   recognition.interimResults = true;  // 話している途中の結果も表示
 
   recognition.onstart = () => {
+    isRecording = true;
+    isStartingRecognition = false;
     micBtn.classList.add("recording");
     micBtn.title = "録音中（タップで停止）";
     userInput.placeholder = "音声を認識中...";
@@ -639,36 +667,65 @@ if (SpeechRecognition) {
       return;
     }
     /* 手動停止 */
-    micBtn.classList.remove("recording");
-    micBtn.title = "音声入力";
-    userInput.placeholder = "メッセージを入力...";
+    resetMicUi();
     if (userInput.value.trim()) userInput.focus();
   };
 
   recognition.onerror = (event) => {
     if (event.error === "no-speech") return; // 無音エラーは無視して継続
-    if (event.error === "not-allowed") {
-      isRecording = false;
-      micBtn.classList.remove("recording");
-      micBtn.title = "音声入力";
-      userInput.placeholder = "メッセージを入力...";
-      addMessage("マイクへのアクセスが許可されていません。ブラウザの設定を確認してください。", "bot");
+    resetMicUi();
+
+    if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+      addMessage("マイク権限が許可されていません。LINEアプリ内の権限設定をご確認ください。", "bot");
+      return;
     }
+
+    if (event.error === "audio-capture") {
+      addMessage("マイクが見つかりません。イヤホン接続や端末設定をご確認ください。", "bot");
+      return;
+    }
+
+    addMessage(`音声入力を開始できませんでした（${event.error}）。この端末ではテキスト入力をご利用ください。`, "bot");
   };
 
-  micBtn.addEventListener("click", () => {
+  micBtn.addEventListener("click", async () => {
+    if (micUnavailableReason) {
+      addMessage(micUnavailableReason, "bot");
+      return;
+    }
+
+    if (!hasShownLiffMicHint && typeof liff !== "undefined" && liff.isInClient()) {
+      hasShownLiffMicHint = true;
+      addMessage("LINE内ブラウザでは端末によって音声入力が使えない場合があります。動かない場合はテキスト入力をご利用ください。", "bot");
+    }
+
     if (isRecording) {
       isRecording = false;
       recognition.stop();
-    } else {
+      return;
+    }
+
+    if (isStartingRecognition) return;
+    isStartingRecognition = true;
+
+    try {
+      await ensureMicrophonePermission();
       finalTranscript = "";
       userInput.value = "";
-      isRecording = true;
       recognition.start();
+    } catch (err) {
+      resetMicUi();
+      const msg = (err && err.name)
+        ? `マイクの利用を開始できませんでした（${err.name}）。LINEアプリのマイク権限をご確認ください。`
+        : "マイクの利用を開始できませんでした。LINEアプリのマイク権限をご確認ください。";
+      addMessage(msg, "bot");
     }
   });
 } else {
-  micBtn.style.display = "none";
+  showMicUnavailable("このブラウザは音声入力に対応していないため、テキスト入力をご利用ください。");
+  micBtn.addEventListener("click", () => {
+    addMessage(micUnavailableReason, "bot");
+  });
 }
 
 /* -------------------------------------------------------
