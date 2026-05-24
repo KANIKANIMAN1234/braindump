@@ -333,6 +333,26 @@ async function callChat(message) {
   }
 }
 
+async function fetchTasks() {
+  try {
+    const res = await fetch("/api/tasks", {
+      headers: { ...authHeader() },
+    });
+    const data = await res.json();
+    return data.tasks || [];
+  } catch {
+    return [];
+  }
+}
+
+function formatTaskLabel(task) {
+  const icon = task.priority === "高" ? "🔴" : task.priority === "中" ? "🟡" : "🔵";
+  const due = task.due_date
+    ? ` (${new Date(task.due_date).getMonth() + 1}/${new Date(task.due_date).getDate()})`
+    : "";
+  return `${icon} ${task.title}${due}`;
+}
+
 async function fetchCategories(content) {
   try {
     const res = await fetch("/api/suggest-categories", {
@@ -376,25 +396,94 @@ function startInsightFlow() {
   addMessage("気づきを入力してください📝", "bot");
 }
 
-function startCompleteFlow() {
-  currentState = STATE.TASK_COMPLETE_NAME;
+async function startCompleteFlow() {
   flowData = {};
-  setInputEnabled(true);
-  addMessage("完了にするタスク名を教えてください✅", "bot");
+  setInputEnabled(false);
+  const typing = addTyping();
+  const tasks = await fetchTasks();
+  typing.remove();
+
+  if (tasks.length === 0) {
+    addMessage("未完了のタスクはないよ！🎉", "bot");
+    setInputEnabled(true);
+    return;
+  }
+
+  addBotMessageWithButtons(
+    "完了にするタスクを選んでください✅",
+    tasks.map((t) => ({ label: formatTaskLabel(t), value: t.title })),
+    (value) => {
+      flowData.completeTitle = value;
+      addMessage(value, "user");
+      currentState = STATE.TASK_COMPLETE_RESULT;
+      setInputEnabled(true);
+      addMessage("どんな結果でしたか？\n「なし」でスキップもできます", "bot");
+    }
+  );
 }
 
-function startUpdatePriorityFlow() {
-  currentState = STATE.TASK_UPDATE_PRIORITY_NAME;
+async function startUpdatePriorityFlow() {
   flowData = {};
-  setInputEnabled(true);
-  addMessage("優先度を変更するタスク名を教えてください🔄", "bot");
+  setInputEnabled(false);
+  const typing = addTyping();
+  const tasks = await fetchTasks();
+  typing.remove();
+
+  if (tasks.length === 0) {
+    addMessage("未完了のタスクはないよ！🎉", "bot");
+    setInputEnabled(true);
+    return;
+  }
+
+  addBotMessageWithButtons(
+    "優先度を変更するタスクを選んでください🔄",
+    tasks.map((t) => ({ label: formatTaskLabel(t), value: t.title })),
+    (value) => {
+      flowData.updateTitle = value;
+      addMessage(value, "user");
+      currentState = STATE.TASK_UPDATE_PRIORITY_SELECT;
+      addBotMessageWithButtons(
+        "新しい優先度を選んでください",
+        [
+          { label: "🔴 高", value: "高", className: "priority-high" },
+          { label: "🟡 中", value: "中", className: "priority-mid" },
+          { label: "🟢 低", value: "低", className: "priority-low" },
+        ],
+        async (priority) => {
+          addMessage(priority, "user");
+          currentState = STATE.IDLE;
+          await callChat(`「${flowData.updateTitle}」の優先度を${priority}に変更して`);
+          setInputEnabled(true);
+        }
+      );
+    }
+  );
 }
 
-function startUpdateDueFlow() {
-  currentState = STATE.TASK_UPDATE_DUE_NAME;
+async function startUpdateDueFlow() {
   flowData = {};
-  setInputEnabled(true);
-  addMessage("期日を変更するタスク名を教えてください📅", "bot");
+  setInputEnabled(false);
+  const typing = addTyping();
+  const tasks = await fetchTasks();
+  typing.remove();
+
+  if (tasks.length === 0) {
+    addMessage("未完了のタスクはないよ！🎉", "bot");
+    setInputEnabled(true);
+    return;
+  }
+
+  addBotMessageWithButtons(
+    "期日を変更するタスクを選んでください📅",
+    tasks.map((t) => ({ label: formatTaskLabel(t), value: t.title })),
+    (value) => {
+      flowData.updateTitle = value;
+      addMessage(value, "user");
+      currentState = STATE.TASK_UPDATE_DUE_DATE;
+      setInputEnabled(true);
+      addMessage("新しい期日を教えてください\n例）6/10\n削除する場合は「なし」と入力してください", "bot");
+    }
+  );
 }
 
 async function showTaskList() {
@@ -454,14 +543,6 @@ async function handleUserInput(text) {
     return;
   }
 
-  /* ── タスク完了：タスク名入力 ── */
-  if (currentState === STATE.TASK_COMPLETE_NAME) {
-    flowData.completeTitle = text;
-    currentState = STATE.TASK_COMPLETE_RESULT;
-    addMessage("どんな結果でしたか？\n「なし」でスキップもできます", "bot");
-    return;
-  }
-
   /* ── タスク完了：結果入力 ── */
   if (currentState === STATE.TASK_COMPLETE_RESULT) {
     flowData.completeResult = text === "なし" ? null : text;
@@ -469,36 +550,6 @@ async function handleUserInput(text) {
     const resultPart = flowData.completeResult ? `、結果: ${flowData.completeResult}` : "";
     await callChat(`「${flowData.completeTitle}」を完了にして${resultPart}`);
     setInputEnabled(true);
-    return;
-  }
-
-  /* ── 優先度修正：タスク名入力 ── */
-  if (currentState === STATE.TASK_UPDATE_PRIORITY_NAME) {
-    flowData.updateTitle = text;
-    currentState = STATE.TASK_UPDATE_PRIORITY_SELECT;
-    setInputEnabled(false);
-    addBotMessageWithButtons(
-      "新しい優先度を選んでください",
-      [
-        { label: "🔴 高", value: "高", className: "priority-high" },
-        { label: "🟡 中", value: "中", className: "priority-mid" },
-        { label: "🟢 低", value: "低", className: "priority-low" },
-      ],
-      async (value) => {
-        addMessage(value, "user");
-        currentState = STATE.IDLE;
-        await callChat(`「${flowData.updateTitle}」の優先度を${value}に変更して`);
-        setInputEnabled(true);
-      }
-    );
-    return;
-  }
-
-  /* ── 期日修正：タスク名入力 ── */
-  if (currentState === STATE.TASK_UPDATE_DUE_NAME) {
-    flowData.updateTitle = text;
-    currentState = STATE.TASK_UPDATE_DUE_DATE;
-    addMessage("新しい期日を教えてください\n例）6/10\n削除する場合は「なし」と入力してください", "bot");
     return;
   }
 
