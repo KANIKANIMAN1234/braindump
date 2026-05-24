@@ -293,7 +293,11 @@ async function executeTool(supabase, name, args, lineUserId) {
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     const filename = `insights_${date}.csv`;
 
-    const dbx = new Dropbox({ accessToken: process.env.DROPBOX_ACCESS_TOKEN });
+    const dbx = new Dropbox({
+      clientId: process.env.DROPBOX_APP_KEY,
+      clientSecret: process.env.DROPBOX_APP_SECRET,
+      refreshToken: process.env.DROPBOX_REFRESH_TOKEN,
+    });
 
     const dropboxPath =
       "/01_Obsidian_vault/01_AI-jissen/03_集中講座/02_supabase(2026.4)/brain-dump-app/insights";
