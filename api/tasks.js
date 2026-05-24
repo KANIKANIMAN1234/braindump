@@ -1,23 +1,15 @@
 const { createClient } = require("@supabase/supabase-js");
 
-async function verifyLineToken(idToken) {
-  const params = new URLSearchParams();
-  params.append("id_token", idToken);
-  params.append("client_id", process.env.LINE_CHANNEL_ID);
-
-  const resp = await fetch("https://api.line.me/oauth2/v2.1/verify", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: params.toString(),
+/* -------------------------------------------------------
+ * LINE token 検証（アクセストークン → プロフィールAPI）
+ * ----------------------------------------------------- */
+async function verifyLineToken(accessToken) {
+  const resp = await fetch("https://api.line.me/v2/profile", {
+    headers: { "Authorization": `Bearer ${accessToken}` },
   });
-
-  if (!resp.ok) {
-    const err = await resp.json();
-    throw new Error(`LINE token error: ${err.error_description || "invalid token"}`);
-  }
-
+  if (!resp.ok) throw new Error("LINE token verification failed");
   const data = await resp.json();
-  return data.sub;
+  return data.userId;
 }
 
 module.exports = async function handler(req, res) {

@@ -52,7 +52,12 @@ function scrollBottom() {
 }
 
 function authHeader() {
-  return lineIdToken ? { "Authorization": `Bearer ${lineIdToken}` } : {};
+  try {
+    const token = liff.getAccessToken() || lineIdToken;
+    return token ? { "Authorization": `Bearer ${token}` } : {};
+  } catch {
+    return lineIdToken ? { "Authorization": `Bearer ${lineIdToken}` } : {};
+  }
 }
 
 /* -------------------------------------------------------
@@ -739,7 +744,7 @@ async function initLiff() {
       return;
     }
 
-    lineIdToken = liff.getIDToken();
+    lineIdToken = liff.getAccessToken();  // IDトークン（10分）→ アクセストークン（12時間・自動更新）
 
     /* LINEプロフィールをヘッダーに表示 */
     liff.getProfile().then((profile) => {
