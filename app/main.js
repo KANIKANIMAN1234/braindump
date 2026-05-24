@@ -598,15 +598,15 @@ async function handleUserInput(text) {
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 let isRecording = false;
+let finalTranscript = "";
 
 if (SpeechRecognition) {
   recognition = new SpeechRecognition();
   recognition.lang = "ja-JP";
-  recognition.interimResults = true;
-  recognition.maxAlternatives = 1;
+  recognition.continuous = true;      // 無音でも自動停止しない
+  recognition.interimResults = true;  // 話している途中の結果も表示
 
   recognition.onstart = () => {
-    isRecording = true;
     micBtn.classList.add("recording");
     micBtn.title = "録音中（タップで停止）";
     userInput.placeholder = "音声を認識中...";
@@ -614,45 +614,51 @@ if (SpeechRecognition) {
 
   recognition.onresult = (event) => {
     let interim = "";
-    let final = "";
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const text = event.results[i][0].transcript;
       if (event.results[i].isFinal) {
-        final += text;
+        finalTranscript += text;
       } else {
         interim += text;
       }
     }
-    userInput.value = final || interim;
+    userInput.value = finalTranscript + interim;
     userInput.style.height = "auto";
     userInput.style.height = Math.min(userInput.scrollHeight, 120) + "px";
   };
 
   recognition.onend = () => {
-    isRecording = false;
+    /* isRecording が true のままなら自動停止 → 即再起動 */
+    if (isRecording) {
+      try { recognition.start(); } catch (e) {}
+      return;
+    }
+    /* 手動停止 */
     micBtn.classList.remove("recording");
     micBtn.title = "音声入力";
     userInput.placeholder = "メッセージを入力...";
-    if (userInput.value.trim()) {
-      userInput.focus();
-    }
+    if (userInput.value.trim()) userInput.focus();
   };
 
   recognition.onerror = (event) => {
-    isRecording = false;
-    micBtn.classList.remove("recording");
-    micBtn.title = "音声入力";
-    userInput.placeholder = "メッセージを入力...";
+    if (event.error === "no-speech") return; // 無音エラーは無視して継続
     if (event.error === "not-allowed") {
+      isRecording = false;
+      micBtn.classList.remove("recording");
+      micBtn.title = "音声入力";
+      userInput.placeholder = "メッセージを入力...";
       addMessage("マイクへのアクセスが許可されていません。ブラウザの設定を確認してください。", "bot");
     }
   };
 
   micBtn.addEventListener("click", () => {
     if (isRecording) {
+      isRecording = false;
       recognition.stop();
     } else {
+      finalTranscript = "";
       userInput.value = "";
+      isRecording = true;
       recognition.start();
     }
   });
