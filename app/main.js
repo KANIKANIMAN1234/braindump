@@ -665,6 +665,18 @@ async function initLiff() {
     }
 
     lineIdToken = liff.getIDToken();
+
+    /* LINEプロフィールをヘッダーに表示 */
+    liff.getProfile().then((profile) => {
+      const icon = document.getElementById("header-user-icon");
+      const name = document.getElementById("header-user-name");
+      if (profile.pictureUrl) {
+        icon.src = profile.pictureUrl;
+        icon.style.display = "block";
+      }
+      name.textContent = profile.displayName;
+    }).catch(() => {});
+
     loadingOverlay.style.display = "none";
     await loadHistory();
 

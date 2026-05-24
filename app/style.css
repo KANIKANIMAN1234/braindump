@@ -35,6 +35,35 @@ body {
   flex-shrink: 0;
 }
 
+.header-user {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255,255,255,0.15);
+  border-radius: 20px;
+  padding: 0.25rem 0.6rem 0.25rem 0.25rem;
+  max-width: 140px;
+}
+
+.header-user-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1.5px solid rgba(255,255,255,0.6);
+}
+
+.header-user-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #fff;
+}
+
 .header-avatar {
   font-size: 2rem;
   line-height: 1;
