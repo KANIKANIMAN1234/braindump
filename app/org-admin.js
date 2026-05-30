@@ -7,6 +7,7 @@
   const btnAdmin = document.getElementById("btn-org-admin");
 
   let orgState = { depth: null, headquarters: [] };
+  let currentSetupOrgName = "";
 
   function authHeader() {
     const token = typeof liff !== "undefined" ? liff.getAccessToken() : null;
@@ -28,14 +29,36 @@
   }
 
   function showOverlay(contentHtml) {
+    if (!overlay || !panel) return;
     panel.innerHTML = contentHtml;
-    overlay.hidden = false;
+    overlay.removeAttribute("hidden");
+    overlay.classList.add("is-open");
+    overlay.setAttribute("aria-hidden", "false");
     document.body.style.overflow = "hidden";
+    requestAnimationFrame(() => {
+      panel.scrollIntoView({ block: "end", behavior: "smooth" });
+    });
   }
 
   function hideOverlay() {
-    overlay.hidden = true;
+    if (!overlay) return;
+    overlay.classList.remove("is-open");
+    overlay.setAttribute("hidden", "");
+    overlay.setAttribute("aria-hidden", "true");
     document.body.style.overflow = "";
+    if (panel) panel.innerHTML = "";
+  }
+
+  function bindOverlayBackdrop() {
+    if (!overlay) return;
+    overlay.addEventListener("click", (e) => {
+      if (e.target !== overlay) return;
+      if (document.getElementById("org-back")) {
+        renderSetupStep1(currentSetupOrgName);
+        return;
+      }
+      hideOverlay();
+    });
   }
 
   function esc(s) {
@@ -100,6 +123,7 @@
 
   /* ── 組織設定ウィザード ── */
   function renderSetupStep1(orgName) {
+    currentSetupOrgName = orgName;
     showOverlay(`
       <div class="org-panel-inner">
         <h2>組織階層の設定</h2>
@@ -125,7 +149,9 @@
   }
 
   function renderSetupStep2(orgName) {
-    const d = orgState.depth;
+    currentSetupOrgName = orgName;
+    const d = Number(orgState.depth);
+    orgState.depth = d;
     let body = "";
 
     if (d === 0) {
@@ -141,9 +167,12 @@
     } else if (d === 2) {
       body = `<div id="hq-list-2"></div>
         <button type="button" class="org-add-btn" id="add-hq-2">＋ 本部を追加</button>`;
-    } else {
+    } else if (d === 3) {
       body = `<div id="hq-list-3"></div>
         <button type="button" class="org-add-btn" id="add-hq-3">＋ 本部を追加</button>`;
+    } else {
+      orgState.depth = 1;
+      return renderSetupStep2(orgName);
     }
 
     showOverlay(`
@@ -172,6 +201,7 @@
 
   function initDeptList1() {
     const wrap = document.getElementById("dept-list-1");
+    if (!wrap) return;
     function addRow(val = "") {
       const row = document.createElement("div");
       row.className = "org-input-row";
@@ -186,6 +216,7 @@
 
   function initHqList2() {
     const wrap = document.getElementById("hq-list-2");
+    if (!wrap) return;
     function render() {
       wrap.innerHTML = "";
       orgState.headquarters.forEach((hq, hi) => {
@@ -226,6 +257,7 @@
 
   function initHqList3() {
     const wrap = document.getElementById("hq-list-3");
+    if (!wrap) return;
     if (!orgState.headquarters[0]) orgState.headquarters = [{ name: "", sections: [{ name: "", departments: [""] }] }];
 
     function render() {
@@ -323,13 +355,18 @@
       alert("利用規約への同意が必要です");
       return;
     }
+    const submitBtn = document.getElementById("org-submit");
+    if (submitBtn) submitBtn.disabled = true;
     try {
       const payload = collectSetupPayload();
       payload.agreed_terms = true;
       await orgApi("/api/org/setup", { method: "POST", body: JSON.stringify(payload) });
+      const savedDepth = orgState.depth;
       hideOverlay();
-      window.dispatchEvent(new CustomEvent("org-setup-complete"));
-      if (orgState.depth === 0) {
+      window.dispatchEvent(
+        new CustomEvent("org-setup-complete", { detail: { depth: savedDepth } })
+      );
+      if (savedDepth === 0) {
         alert("代表者のみの組織として設定が完了しました。");
         if (btnAdmin) btnAdmin.hidden = true;
         return;
@@ -338,6 +375,8 @@
       renderInvitePanel(orgName);
     } catch (e) {
       alert(e.message);
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
     }
   }
 
@@ -428,31 +467,59 @@
     }
   }
 
+  let latestAuth = null;
+  let setupWizardAutoShown = false;
+
   window.initOrgAdmin = function (authMe) {
     if (!authMe || authMe.legacy) return;
+    latestAuth = authMe;
 
-    const orgName = authMe.organization?.name || "";
-    const isSoloOrg = authMe.organization?.org_structure_depth === 0;
-    const showAdmin =
-      authMe.needsOrgSetup ||
-      (!isSoloOrg && authMe.member && authMe.member.role !== "member");
+    function applyAdminVisibility(me) {
+      const orgName = me.organization?.name || "";
+      const isSoloOrg = me.organization?.org_structure_depth === 0;
+      const showAdmin =
+        me.needsOrgSetup ||
+        (!isSoloOrg && me.member && me.member.role !== "member");
 
-    if (!showAdmin) {
-      btnAdmin.hidden = true;
-      return;
+      if (!showAdmin) {
+        btnAdmin.hidden = true;
+        return orgName;
+      }
+
+      btnAdmin.hidden = false;
+      btnAdmin.onclick = () => {
+        if (latestAuth?.needsOrgSetup) {
+          renderSetupStep1(orgName);
+        } else {
+          renderInvitePanel(orgName);
+        }
+      };
+      return orgName;
     }
 
-    btnAdmin.hidden = false;
-    btnAdmin.onclick = () => {
-      if (authMe.needsOrgSetup) {
-        renderSetupStep1(orgName);
-      } else {
-        renderInvitePanel(orgName);
-      }
-    };
+    const orgName = applyAdminVisibility(authMe);
 
-    if (authMe.needsOrgSetup) {
+    if (authMe.needsOrgSetup && !setupWizardAutoShown) {
+      setupWizardAutoShown = true;
       setTimeout(() => renderSetupStep1(orgName), 500);
     }
   };
+
+  bindOverlayBackdrop();
+
+  window.addEventListener("org-setup-complete", async (ev) => {
+    hideOverlay();
+    latestAuth = latestAuth
+      ? {
+          ...latestAuth,
+          needsOrgSetup: false,
+          organization: {
+            ...latestAuth.organization,
+            status: "active",
+            org_structure_depth: ev.detail?.depth ?? latestAuth.organization?.org_structure_depth,
+          },
+        }
+      : latestAuth;
+    if (latestAuth) window.initOrgAdmin(latestAuth);
+  });
 })();
