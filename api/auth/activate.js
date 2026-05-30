@@ -1,6 +1,6 @@
-const { getSupabaseAdmin } = require("../lib/supabase-admin");
-const { verifyLineToken, extractBearerToken } = require("../lib/line-auth");
-const { logPlatformAudit } = require("../lib/audit");
+const { getSupabaseAdmin } = require("../../lib/supabase-admin");
+const { verifyLineToken, extractBearerToken } = require("../../lib/line-auth");
+const { logPlatformAudit } = require("../../lib/audit");
 
 /**
  * POST /api/auth/activate

@@ -1,11 +1,11 @@
-const { getSupabaseAdmin } = require("../lib/supabase-admin");
-const { verifyPlatformSecret } = require("../lib/platform-auth");
-const { logPlatformAudit } = require("../lib/audit");
+const { getSupabaseAdmin } = require("../../lib/supabase-admin");
+const { verifyPlatformSecret } = require("../../lib/platform-auth");
+const { logPlatformAudit } = require("../../lib/audit");
 const {
   generateInviteCode,
   getInviteExpiresAt,
   buildLiffInviteUrl,
-} = require("../lib/invites");
+} = require("../../lib/invites");
 
 /**
  * POST /api/platform/invite-representative

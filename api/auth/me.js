@@ -1,5 +1,5 @@
-const { getSupabaseAdmin } = require("../lib/supabase-admin");
-const { verifyLineToken, extractBearerToken } = require("../lib/line-auth");
+const { getSupabaseAdmin } = require("../../lib/supabase-admin");
+const { verifyLineToken, extractBearerToken } = require("../../lib/line-auth");
 
 /**
  * GET /api/auth/me
