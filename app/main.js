@@ -848,16 +848,15 @@ async function fetchAuthMe() {
 }
 
 function updateHeaderOrganization(org) {
-  const wrap = document.getElementById("header-org");
   const el = document.getElementById("header-org-name");
-  if (!wrap || !el) return;
+  if (!el) return;
   const name = org?.name?.trim();
   if (name) {
     el.textContent = name;
-    wrap.hidden = false;
+    el.hidden = false;
   } else {
     el.textContent = "";
-    wrap.hidden = true;
+    el.hidden = true;
   }
 }
 
