@@ -198,7 +198,8 @@ module.exports = async function handler(req, res) {
         const args = JSON.parse(toolCall.function.arguments);
         const result = await executeTool(supabase, toolCall.function.name, args, ctx);
         if (toolCall.function.name === "list_tasks") {
-          taskListData = result.tasks;
+          const rows = result.tasks || [];
+          taskListData = rows.filter((t) => !t.completed);
         }
         messages.push({ role: "tool", tool_call_id: toolCall.id, content: JSON.stringify(result) });
       }
