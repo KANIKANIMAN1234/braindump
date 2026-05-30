@@ -3,6 +3,8 @@
     { "source": "/app", "destination": "/app/index.html" },
     { "source": "/app/", "destination": "/app/index.html" },
     { "source": "/platform", "destination": "/platform/index.html" },
-    { "source": "/platform/", "destination": "/platform/index.html" }
+    { "source": "/platform/", "destination": "/platform/index.html" },
+    { "source": "/app/platform", "destination": "/app/platform/index.html" },
+    { "source": "/app/platform/", "destination": "/app/platform/index.html" }
   ]
 }
