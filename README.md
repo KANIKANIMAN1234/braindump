@@ -86,7 +86,7 @@ BrainDump は、LINE公式アカウントのリッチメニューから起動す
 
 | 用途 | URL / API |
 |------|-----------|
-| 運営コンソール | `/app/platform/`（推奨）または `/platform/` |
+| 運営コンソール | **`/app/platform-console.html`**（推奨） |
 | 法人登録 | `POST /api/platform/organizations` |
 | 代表招待 | `POST /api/platform/invite-representative` |
 | LINE 紐づけ | `POST /api/auth/activate?invite=...` |
