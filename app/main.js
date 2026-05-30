@@ -847,16 +847,32 @@ async function fetchAuthMe() {
   return data;
 }
 
+/** ヘッダーに organizations.name を表示 */
 function updateHeaderOrganization(org) {
   const el = document.getElementById("header-org-name");
   if (!el) return;
-  const name = org?.name?.trim();
+  const name =
+    org && org.name != null ? String(org.name).trim() : "";
   if (name) {
     el.textContent = name;
+    el.title = name;
     el.hidden = false;
   } else {
     el.textContent = "";
+    el.title = "";
     el.hidden = true;
+  }
+}
+
+async function refreshHeaderOrganizationFromApi() {
+  try {
+    const me = await fetchAuthMe();
+    if (!me.legacy && me.organization) {
+      currentOrganization = me.organization;
+      updateHeaderOrganization(me.organization);
+    }
+  } catch (e) {
+    console.warn("refreshHeaderOrganization:", e);
   }
 }
 
@@ -975,6 +991,7 @@ async function initLiff() {
 
     loadingOverlay.style.display = "none";
     await loadHistory();
+    await refreshHeaderOrganizationFromApi();
 
   } catch (e) {
     console.error("LIFF init error:", e);
