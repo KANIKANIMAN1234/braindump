@@ -19,6 +19,9 @@
 -- group by o.name, m.display_name, m.status, m.role, m.line_user_id, t.line_user_id;
 
 -- ---------------------------------------------------------------------------
+-- 2a-pre. 手入力時の余白を除去
+-- update members set line_user_id = trim(line_user_id) where line_user_id is not null;
+
 -- 2a. members に LINE ID を登録（未登録の代表管理者）
 --     タスクに最も多い line_user_id を採用（同一人物の法人登録前 ID）
 -- ---------------------------------------------------------------------------

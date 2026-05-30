@@ -496,7 +496,16 @@ async function startUpdateDueFlow() {
 
 async function showTaskList() {
   addMessage("タスク一覧", "user");
-  await callChat("未完了のタスクをすべて表示して");
+  const typing = addTyping();
+  try {
+    const tasks = await fetchTasks();
+    typing.remove();
+    addTaskListMessage(tasks);
+  } catch (err) {
+    typing.remove();
+    addMessage("タスクの取得に失敗しました", "bot");
+    console.error(err);
+  }
 }
 
 /* -------------------------------------------------------

@@ -12,8 +12,8 @@ module.exports = async function handler(req, res) {
 
   let query = supabase
     .from("tasks")
-    .select("id, title, due_date, priority")
-    .eq("completed", false)
+    .select("id, title, due_date, priority, completed")
+    .or("completed.eq.false,completed.is.null")
     .order("due_date", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: true });
 
