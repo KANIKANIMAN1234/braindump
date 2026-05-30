@@ -3,6 +3,8 @@
  * ----------------------------------------------------- */
 const LIFF_ID = "2010175951-S9r18QtA";
 let lineIdToken = null;
+let currentMember = null;
+let currentOrganization = null;
 
 /* -------------------------------------------------------
  * 状態管理
@@ -801,6 +803,50 @@ document.getElementById("qa-export").addEventListener("click", async () => {
 });
 
 /* -------------------------------------------------------
+ * メンバー認証（Phase 1: 招待紐づけ / auth/me）
+ * ----------------------------------------------------- */
+function getInviteCodeFromUrl() {
+  return new URLSearchParams(location.search).get("invite");
+}
+
+function clearInviteFromUrl() {
+  const url = new URL(location.href);
+  url.searchParams.delete("invite");
+  history.replaceState(null, "", url.pathname + url.search + url.hash);
+}
+
+async function activateInvite(inviteCode) {
+  const res = await fetch("/api/auth/activate", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeader(),
+    },
+    body: JSON.stringify({ invite: inviteCode }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "招待の登録に失敗しました");
+  return data;
+}
+
+async function fetchAuthMe() {
+  const res = await fetch("/api/auth/me", {
+    headers: { ...authHeader() },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "認証情報の取得に失敗しました");
+  return data;
+}
+
+function showOrgSetupNotice(organization) {
+  const name = organization?.name || "ご所属の法人";
+  addMessage(
+    `${name} の代表管理者として登録されました。\n組織階層の設定（Phase 2）は今後この画面から行えます。`,
+    "bot"
+  );
+}
+
+/* -------------------------------------------------------
  * チャット履歴の読み込み
  * ----------------------------------------------------- */
 function addHistorySeparator(label) {
@@ -841,11 +887,11 @@ async function initLiff() {
     await liff.init({ liffId: LIFF_ID });
 
     if (!liff.isLoggedIn()) {
-      liff.login();
+      liff.login({ redirectUri: window.location.href });
       return;
     }
 
-    lineIdToken = liff.getAccessToken();  // IDトークン（10分）→ アクセストークン（12時間・自動更新）
+    lineIdToken = liff.getAccessToken();
 
     /* LINEプロフィールをヘッダーに表示 */
     liff.getProfile().then((profile) => {
@@ -857,6 +903,37 @@ async function initLiff() {
       }
       name.textContent = profile.displayName;
     }).catch(() => {});
+
+    const inviteCode = getInviteCodeFromUrl();
+    if (inviteCode) {
+      try {
+        const activated = await activateInvite(inviteCode);
+        currentMember = activated.member;
+        currentOrganization = activated.organization;
+        clearInviteFromUrl();
+        addMessage("登録が完了しました。BrainDump をご利用いただけます。", "bot");
+        if (activated.needsOrgSetup) {
+          showOrgSetupNotice(activated.organization);
+        }
+      } catch (activateErr) {
+        loadingOverlay.style.display = "none";
+        addMessage(`招待の登録に失敗しました: ${activateErr.message}`, "bot");
+        return;
+      }
+    } else {
+      try {
+        const me = await fetchAuthMe();
+        if (!me.legacy && me.member) {
+          currentMember = me.member;
+          currentOrganization = me.organization;
+          if (me.needsOrgSetup) {
+            showOrgSetupNotice(me.organization);
+          }
+        }
+      } catch (meErr) {
+        console.warn("auth/me:", meErr);
+      }
+    }
 
     loadingOverlay.style.display = "none";
     await loadHistory();
