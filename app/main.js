@@ -838,7 +838,22 @@ async function fetchAuthMe() {
   return data;
 }
 
+function updateHeaderOrganization(org) {
+  const wrap = document.getElementById("header-org");
+  const el = document.getElementById("header-org-name");
+  if (!wrap || !el) return;
+  const name = org?.name?.trim();
+  if (name) {
+    el.textContent = name;
+    wrap.hidden = false;
+  } else {
+    el.textContent = "";
+    wrap.hidden = true;
+  }
+}
+
 function showOrgSetupNotice(organization) {
+  updateHeaderOrganization(organization);
   const name = organization?.name || "ご所属の法人";
   addMessage(
     `${name} の代表管理者として登録されました。\n右上の ⚙️ から組織階層の設定を行ってください。`,
@@ -916,6 +931,7 @@ async function initLiff() {
         const activated = await activateInvite(inviteCode);
         currentMember = activated.member;
         currentOrganization = activated.organization;
+        updateHeaderOrganization(activated.organization);
         clearInviteFromUrl();
         addMessage("登録が完了しました。BrainDump をご利用いただけます。", "bot");
         if (activated.needsOrgSetup) {
@@ -938,6 +954,7 @@ async function initLiff() {
         if (!me.legacy && me.member) {
           currentMember = me.member;
           currentOrganization = me.organization;
+          updateHeaderOrganization(me.organization);
           if (me.needsOrgSetup) {
             showOrgSetupNotice(me.organization);
           }
@@ -957,5 +974,17 @@ async function initLiff() {
     addMessage("⚠️ 認証エラーが発生しました。LINEからアクセスしてください。", "bot");
   }
 }
+
+window.addEventListener("org-setup-complete", async () => {
+  try {
+    const me = await fetchAuthMe();
+    if (!me.legacy && me.organization) {
+      currentOrganization = me.organization;
+      updateHeaderOrganization(me.organization);
+    }
+  } catch (e) {
+    console.warn("org-setup-complete:", e);
+  }
+});
 
 initLiff();

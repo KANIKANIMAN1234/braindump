@@ -36,10 +36,10 @@ body {
 }
 
 .header-actions {
-  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 0.35rem;
+  flex-shrink: 0;
 }
 
 .header-admin-btn {
@@ -89,6 +89,12 @@ body {
 .header-avatar {
   font-size: 2rem;
   line-height: 1;
+  flex-shrink: 0;
+}
+
+.header-info {
+  flex-shrink: 0;
+  min-width: 0;
 }
 
 .header-name {
@@ -99,6 +105,24 @@ body {
 .header-sub {
   font-size: 0.75rem;
   opacity: 0.8;
+}
+
+.header-org {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  padding: 0 0.35rem;
+}
+
+.header-org-name {
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #fff;
 }
 
 /* ── メッセージエリア ── */
