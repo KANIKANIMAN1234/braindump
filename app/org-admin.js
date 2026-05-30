@@ -45,6 +45,59 @@
       .replace(/"/g, "&quot;");
   }
 
+  function extractInviteFromResponse(data) {
+    const invite = data?.invite || data?.representativeInvite?.invite;
+    if (!invite?.invite_url) return null;
+    const member = data?.member || data?.representativeInvite?.member;
+    return {
+      url: invite.invite_url,
+      displayName: member?.display_name || "—",
+      role: member?.role || "—",
+      expiresAt: invite.expires_at || null,
+    };
+  }
+
+  function showInviteApiResult(areaId, boxId, preId, data) {
+    const area = document.getElementById(areaId);
+    const box = document.getElementById(boxId);
+    const pre = document.getElementById(preId);
+    if (!area || !pre) return;
+
+    area.hidden = false;
+    pre.textContent = JSON.stringify(data, null, 2);
+
+    const info = extractInviteFromResponse(data);
+    if (!info || !box) return;
+
+    const expires = info.expiresAt
+      ? new Date(info.expiresAt).toLocaleString("ja-JP")
+      : "—";
+
+    box.hidden = false;
+    box.innerHTML = `
+      <p class="org-invite-title">📩 招待 URL（この URL を送付）</p>
+      <div class="org-invite-url-row">
+        <input type="text" class="org-invite-url-input" id="${boxId}-url" readonly />
+        <button type="button" class="org-invite-copy" data-target="${boxId}-url">コピー</button>
+      </div>
+      <p class="org-invite-meta">招待先: <strong>${esc(info.displayName)}</strong>（${esc(info.role)}）<br />有効期限: ${esc(expires)}</p>
+    `;
+    const input = document.getElementById(`${boxId}-url`);
+    input.value = info.url;
+    box.querySelector(".org-invite-copy").addEventListener("click", async (e) => {
+      const btn = e.currentTarget;
+      const el = document.getElementById(btn.dataset.target);
+      try {
+        await navigator.clipboard.writeText(el.value);
+        btn.textContent = "コピー済";
+      } catch {
+        el.select();
+        document.execCommand("copy");
+        btn.textContent = "コピー済";
+      }
+    });
+  }
+
   /* ── 組織設定ウィザード ── */
   function renderSetupStep1(orgName) {
     showOverlay(`
@@ -52,6 +105,7 @@
         <h2>組織階層の設定</h2>
         <p class="org-sub">${esc(orgName)} の組織構造を選んでください。</p>
         <div class="org-depth-btns">
+          <button type="button" class="org-depth-btn" data-depth="0">0段<br><small>代表者のみ</small></button>
           <button type="button" class="org-depth-btn" data-depth="1">1段<br><small>部門のみ</small></button>
           <button type="button" class="org-depth-btn" data-depth="2">2段<br><small>本部→部門</small></button>
           <button type="button" class="org-depth-btn" data-depth="3">3段<br><small>本部→課→部門</small></button>
@@ -62,7 +116,8 @@
     panel.querySelectorAll(".org-depth-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         orgState.depth = Number(btn.dataset.depth);
-        orgState.headquarters = [{ name: "", departments: [""] }];
+        orgState.headquarters =
+          orgState.depth === 0 ? [] : [{ name: "", departments: [""] }];
         renderSetupStep2(orgName);
       });
     });
@@ -73,7 +128,11 @@
     const d = orgState.depth;
     let body = "";
 
-    if (d === 1) {
+    if (d === 0) {
+      body = `
+        <p class="org-solo-note">部門・部下の登録はありません。<strong>代表者（あなた）1名のみ</strong>で利用します。</p>
+      `;
+    } else if (d === 1) {
       body = `
         <label>部門名（複数可）</label>
         <div id="dept-list-1"></div>
@@ -89,7 +148,7 @@
 
     showOverlay(`
       <div class="org-panel-inner">
-        <h2>組織名の入力（${d}段）</h2>
+        <h2>${d === 0 ? "代表者のみの確認" : `組織名の入力（${d}段）`}</h2>
         <p class="org-sub">${esc(orgName)}</p>
         ${body}
         <label class="org-terms">
@@ -225,6 +284,9 @@
 
   function collectSetupPayload() {
     const d = orgState.depth;
+    if (d === 0) {
+      return { depth: 0, agreed_terms: true };
+    }
     if (d === 1) {
       const departments = [...panel.querySelectorAll(".dept-input")]
         .map((i) => i.value.trim())
@@ -266,8 +328,13 @@
       payload.agreed_terms = true;
       await orgApi("/api/org/setup", { method: "POST", body: JSON.stringify(payload) });
       hideOverlay();
-      alert("組織設定が完了しました。メンバーを招待できます。");
       window.dispatchEvent(new CustomEvent("org-setup-complete"));
+      if (orgState.depth === 0) {
+        alert("代表者のみの組織として設定が完了しました。");
+        if (btnAdmin) btnAdmin.hidden = true;
+        return;
+      }
+      alert("組織設定が完了しました。メンバーを招待できます。");
       renderInvitePanel(orgName);
     } catch (e) {
       alert(e.message);
@@ -310,7 +377,13 @@
         <label>ロール <select id="inv-role">${roleOptions}</select></label>
         <label>所属組織 <select id="inv-unit">${unitOptions}</select></label>
         <button type="button" class="org-primary" id="inv-submit">招待 URL を発行</button>
-        <pre id="inv-result" class="org-result" hidden></pre>
+        <div id="inv-result-area" class="org-invite-result-area" hidden>
+          <div id="inv-invite-box" class="org-invite-highlight" hidden></div>
+          <details class="org-result-details">
+            <summary>レスポンス詳細（JSON）</summary>
+            <pre id="inv-result" class="org-result"></pre>
+          </details>
+        </div>
         <hr />
         <h3>メンバー一覧</h3>
         <div id="member-list" class="org-member-list">読み込み中…</div>
@@ -327,9 +400,7 @@
           method: "POST",
           body: JSON.stringify({ display_name, role, org_unit_id }),
         });
-        const pre = document.getElementById("inv-result");
-        pre.hidden = false;
-        pre.textContent = JSON.stringify(data, null, 2);
+        showInviteApiResult("inv-result-area", "inv-invite-box", "inv-result", data);
         loadMemberList();
       } catch (e) {
         alert(e.message);
@@ -361,8 +432,10 @@
     if (!authMe || authMe.legacy) return;
 
     const orgName = authMe.organization?.name || "";
+    const isSoloOrg = authMe.organization?.org_structure_depth === 0;
     const showAdmin =
-      authMe.needsOrgSetup || (authMe.member && authMe.member.role !== "member");
+      authMe.needsOrgSetup ||
+      (!isSoloOrg && authMe.member && authMe.member.role !== "member");
 
     if (!showAdmin) {
       btnAdmin.hidden = true;

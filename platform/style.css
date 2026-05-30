@@ -51,8 +51,77 @@ button.primary {
   margin-top: 0.5rem;
 }
 button:hover { opacity: 0.9; }
-.result {
+.result-area {
   margin-top: 1rem;
+}
+
+.invite-highlight {
+  background: #e8f5e9;
+  border: 2px solid #075e54;
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.invite-highlight h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  color: #075e54;
+}
+
+.invite-url-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.invite-url-input {
+  flex: 1;
+  padding: 0.65rem 0.75rem;
+  font-size: 0.85rem;
+  border: 1px solid #81c784;
+  border-radius: 8px;
+  background: #fff;
+  color: #1a1a1a;
+  word-break: break-all;
+}
+
+.btn-copy {
+  flex-shrink: 0;
+  background: #075e54;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-copy.copied {
+  background: #2e7d32;
+}
+
+.invite-meta {
+  margin: 0.65rem 0 0;
+  font-size: 0.8rem;
+  color: #555;
+  line-height: 1.5;
+}
+
+.result-details {
+  margin-top: 0.5rem;
+}
+
+.result-details summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: #666;
+  margin-bottom: 0.35rem;
+}
+
+.result {
+  margin-top: 0.35rem;
   padding: 0.75rem;
   background: #f8f9fa;
   border-radius: 8px;

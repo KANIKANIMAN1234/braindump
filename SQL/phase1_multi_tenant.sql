@@ -10,7 +10,7 @@ create table if not exists organizations (
   postal_code         text,
   address             text,
   phone               text,
-  org_structure_depth int         check (org_structure_depth in (1, 2, 3)),
+  org_structure_depth int         check (org_structure_depth in (0, 1, 2, 3)),
   status              text        not null default 'pending_setup'
                       check (status in ('pending_setup', 'active', 'suspended')),
   created_at          timestamptz not null default now(),

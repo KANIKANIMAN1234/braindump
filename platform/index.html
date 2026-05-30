@@ -44,7 +44,13 @@
         </label>
         <button type="submit" class="primary">法人を登録</button>
       </form>
-      <pre id="org-result" class="result" hidden></pre>
+      <div id="org-result-area" class="result-area" hidden>
+        <div id="org-invite-box" class="invite-highlight" hidden></div>
+        <details class="result-details">
+          <summary>レスポンス詳細（JSON）</summary>
+          <pre id="org-result" class="result"></pre>
+        </details>
+      </div>
     </section>
 
     <section class="card" id="invite-section" hidden>
@@ -58,7 +64,13 @@
         </label>
         <button type="submit" class="primary">招待 URL を発行</button>
       </form>
-      <pre id="invite-result" class="result" hidden></pre>
+      <div id="invite-result-area" class="result-area" hidden>
+        <div id="invite-invite-box" class="invite-highlight" hidden></div>
+        <details class="result-details">
+          <summary>レスポンス詳細（JSON）</summary>
+          <pre id="invite-result" class="result"></pre>
+        </details>
+      </div>
     </section>
 
     <section class="card" id="list-section" hidden>

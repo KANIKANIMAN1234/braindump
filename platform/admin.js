@@ -37,6 +37,100 @@ function showPanels() {
   document.getElementById("list-section").hidden = false;
 }
 
+function formatOrgDepth(depth) {
+  if (depth == null) return "未設定";
+  const labels = {
+    0: "0段（代表のみ）",
+    1: "1段（部門のみ）",
+    2: "2段（本部→部門）",
+    3: "3段（本部→課→部門）",
+  };
+  return labels[depth] || String(depth);
+}
+
+function extractInviteInfo(data) {
+  const invite =
+    data?.representativeInvite?.invite ||
+    data?.invite ||
+    null;
+  if (!invite?.invite_url) return null;
+  const member =
+    data?.representativeInvite?.member || data?.member || null;
+  return {
+    url: invite.invite_url,
+    displayName: member?.display_name || "—",
+    role: member?.role || "—",
+    expiresAt: invite.expires_at || null,
+  };
+}
+
+function renderInviteHighlight(boxId, info) {
+  const box = document.getElementById(boxId);
+  if (!box || !info) return;
+
+  const expires = info.expiresAt
+    ? new Date(info.expiresAt).toLocaleString("ja-JP")
+    : "—";
+
+  box.hidden = false;
+  box.innerHTML = `
+    <h3>📩 招待 URL（この URL を代表者に送ってください）</h3>
+    <div class="invite-url-row">
+      <input type="text" class="invite-url-input" id="${boxId}-url" readonly value="" />
+      <button type="button" class="btn-copy" data-copy-target="${boxId}-url">コピー</button>
+    </div>
+    <p class="invite-meta">
+      招待先: <strong>${escapeHtml(info.displayName)}</strong>（${escapeHtml(info.role)}）<br />
+      有効期限: ${escapeHtml(expires)}（7日間・1回限り）
+    </p>
+  `;
+
+  const input = document.getElementById(`${boxId}-url`);
+  input.value = info.url;
+
+  box.querySelector(".btn-copy").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    const target = document.getElementById(btn.dataset.copyTarget);
+    try {
+      await navigator.clipboard.writeText(target.value);
+      btn.textContent = "コピーしました";
+      btn.classList.add("copied");
+      setTimeout(() => {
+        btn.textContent = "コピー";
+        btn.classList.remove("copied");
+      }, 2000);
+    } catch {
+      target.select();
+      document.execCommand("copy");
+      btn.textContent = "コピーしました";
+    }
+  });
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/"/g, "&quot;");
+}
+
+function showApiResult({ areaId, boxId, preId, data }) {
+  const area = document.getElementById(areaId);
+  const box = document.getElementById(boxId);
+  const pre = document.getElementById(preId);
+
+  area.hidden = false;
+  pre.textContent = JSON.stringify(data, null, 2);
+
+  const info = extractInviteInfo(data);
+  if (info) {
+    renderInviteHighlight(boxId, info);
+  } else if (box) {
+    box.hidden = true;
+    box.innerHTML = "";
+  }
+}
+
 async function loadOrganizations() {
   const data = await api("/api/platform/organizations");
   const list = document.getElementById("org-list");
@@ -51,7 +145,7 @@ async function loadOrganizations() {
     div.innerHTML = `
       <strong>${org.name}</strong>
       <span>ID: ${org.id}</span><br />
-      状態: ${org.status} / 階層: ${org.org_structure_depth ?? "未設定"}<br />
+      状態: ${org.status} / 階層: ${formatOrgDepth(org.org_structure_depth)}<br />
       ${org.postal_code || ""} ${org.address || ""}<br />
       TEL: ${org.phone || "—"}
     `;
@@ -101,9 +195,12 @@ document.getElementById("org-form").addEventListener("submit", async (e) => {
       method: "POST",
       body: JSON.stringify(body),
     });
-    const result = document.getElementById("org-result");
-    result.hidden = false;
-    result.textContent = JSON.stringify(data, null, 2);
+    showApiResult({
+      areaId: "org-result-area",
+      boxId: "org-invite-box",
+      preId: "org-result",
+      data,
+    });
     e.target.reset();
     await loadOrganizations();
   } catch (err) {
@@ -122,9 +219,12 @@ document.getElementById("invite-form").addEventListener("submit", async (e) => {
       method: "POST",
       body: JSON.stringify({ organization_id, display_name }),
     });
-    const result = document.getElementById("invite-result");
-    result.hidden = false;
-    result.textContent = JSON.stringify(data, null, 2);
+    showApiResult({
+      areaId: "invite-result-area",
+      boxId: "invite-invite-box",
+      preId: "invite-result",
+      data,
+    });
     await loadOrganizations();
   } catch (err) {
     showError(err.message);
