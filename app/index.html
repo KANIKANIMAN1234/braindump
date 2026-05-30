@@ -31,9 +31,12 @@
         <div class="header-name">BrainDump</div>
         <div class="header-sub">Supabase × OpenAI</div>
       </div>
-      <div class="header-user" id="header-user">
-        <img class="header-user-icon" id="header-user-icon" src="" alt="" style="display:none;" />
-        <span class="header-user-name" id="header-user-name"></span>
+      <div class="header-actions">
+        <button type="button" id="btn-org-admin" class="header-admin-btn" hidden title="組織・招待管理">⚙️</button>
+        <div class="header-user" id="header-user">
+          <img class="header-user-icon" id="header-user-icon" src="" alt="" style="display:none;" />
+          <span class="header-user-name" id="header-user-name"></span>
+        </div>
       </div>
     </header>
 
@@ -70,6 +73,12 @@
     </footer>
 
   </div>
-  <script src="main.js?v=7"></script>
+
+  <div id="org-overlay" class="org-overlay" hidden>
+    <div id="org-panel" class="org-panel"></div>
+  </div>
+
+  <script src="org-admin.js?v=1"></script>
+  <script src="main.js?v=8"></script>
 </body>
 </html>

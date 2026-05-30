@@ -841,9 +841,15 @@ async function fetchAuthMe() {
 function showOrgSetupNotice(organization) {
   const name = organization?.name || "ご所属の法人";
   addMessage(
-    `${name} の代表管理者として登録されました。\n組織階層の設定（Phase 2）は今後この画面から行えます。`,
+    `${name} の代表管理者として登録されました。\n右上の ⚙️ から組織階層の設定を行ってください。`,
     "bot"
   );
+}
+
+function initOrgAdminFromAuth(me) {
+  if (typeof window.initOrgAdmin === "function") {
+    window.initOrgAdmin(me);
+  }
 }
 
 /* -------------------------------------------------------
@@ -915,6 +921,12 @@ async function initLiff() {
         if (activated.needsOrgSetup) {
           showOrgSetupNotice(activated.organization);
         }
+        initOrgAdminFromAuth({
+          legacy: false,
+          member: activated.member,
+          organization: activated.organization,
+          needsOrgSetup: activated.needsOrgSetup,
+        });
       } catch (activateErr) {
         loadingOverlay.style.display = "none";
         addMessage(`招待の登録に失敗しました: ${activateErr.message}`, "bot");
@@ -929,6 +941,7 @@ async function initLiff() {
           if (me.needsOrgSetup) {
             showOrgSetupNotice(me.organization);
           }
+          initOrgAdminFromAuth(me);
         }
       } catch (meErr) {
         console.warn("auth/me:", meErr);

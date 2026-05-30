@@ -91,7 +91,12 @@ BrainDump は、LINE公式アカウントのリッチメニューから起動す
 | 代表招待 | `POST /api/platform/invite-representative` |
 | LINE 紐づけ | `POST /api/auth/activate?invite=...` |
 
-**必須:** Supabase で `SQL/phase1_multi_tenant.sql` を実行し、Vercel に `SUPABASE_SERVICE_ROLE_KEY` と `PLATFORM_ADMIN_SECRET` を設定してください。
+**必須:** Supabase で `SQL/phase1_multi_tenant.sql` と **`SQL/phase2_org_hierarchy.sql`** を実行し、Vercel に `SUPABASE_SERVICE_ROLE_KEY` と `PLATFORM_ADMIN_SECRET` を設定してください。
+
+### Phase 2
+
+- 代表管理者: アプリ右上 **⚙️** から組織階層（1/2/3段）設定・メンバー招待
+- 詳細: [docs/10_Phase2_組織階層.md](docs/10_Phase2_組織階層.md)
 
 ## 8. 補足
 

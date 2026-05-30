@@ -1,18 +1,9 @@
 const { OpenAI } = require("openai");
-const { createClient } = require("@supabase/supabase-js");
-const { Dropbox } = require("dropbox");
-
-/* -------------------------------------------------------
- * LINE token 検証（アクセストークン → プロフィールAPI）
- * ----------------------------------------------------- */
-async function verifyLineToken(accessToken) {
-  const resp = await fetch("https://api.line.me/v2/profile", {
-    headers: { "Authorization": `Bearer ${accessToken}` },
-  });
-  if (!resp.ok) throw new Error("LINE token verification failed");
-  const data = await resp.json();
-  return data.userId;
-}
+const { getSupabaseAdmin } = require("../lib/supabase-admin");
+const { extractBearerToken } = require("../lib/line-auth");
+const { resolveMemberContext } = require("../lib/member-context");
+const { executeTool, getWeekRange } = require("../lib/execute-tools");
+const { scopedRowData } = require("../lib/data-scope");
 
 /* -------------------------------------------------------
  * ツール定義
@@ -138,190 +129,6 @@ const tools = [
 ];
 
 /* -------------------------------------------------------
- * ユーティリティ
- * ----------------------------------------------------- */
-function getWeekRange() {
-  const now = new Date();
-  const day = now.getDay();
-  const monday = new Date(now);
-  monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  return {
-    start: monday.toISOString().split("T")[0],
-    end: sunday.toISOString().split("T")[0],
-  };
-}
-
-function toCSV(rows) {
-  if (!rows || rows.length === 0) return "id,content,tags,created_at\n";
-  const header = "id,content,tags,created_at";
-  const lines = rows.map((r) => {
-    const escape = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    return [escape(r.id), escape(r.content), escape(r.tags ?? ""), escape(r.created_at)].join(",");
-  });
-  return [header, ...lines].join("\n");
-}
-
-/* -------------------------------------------------------
- * ツール実行
- * ----------------------------------------------------- */
-async function executeTool(supabase, name, args, lineUserId) {
-  /* ── タスク ── */
-  if (name === "add_task") {
-    const validPriorities = ["高", "中", "低"];
-    const priority = validPriorities.includes(args.priority) ? args.priority : "中";
-    const { error } = await supabase
-      .from("tasks")
-      .insert({ title: args.title, due_date: args.due_date || null, priority, line_user_id: lineUserId });
-    if (error) throw error;
-    return { success: true, title: args.title, due_date: args.due_date, priority };
-  }
-
-  if (name === "list_tasks") {
-    const today = new Date().toISOString().split("T")[0];
-    const week = getWeekRange();
-    let query = supabase
-      .from("tasks")
-      .select("id, title, due_date, completed, priority")
-      .eq("line_user_id", lineUserId)
-      .order("due_date", { ascending: true, nullsFirst: false })
-      .order("created_at", { ascending: true });
-
-    if (args.filter === "this_week") {
-      query = query.gte("due_date", week.start).lte("due_date", week.end);
-    } else if (args.filter === "today") {
-      query = query.eq("due_date", today);
-    } else if (args.filter === "incomplete") {
-      query = query.eq("completed", false);
-    }
-
-    const { data, error } = await query;
-    if (error) throw error;
-    return { tasks: data || [] };
-  }
-
-  if (name === "complete_task") {
-    const { data: tasks, error: findError } = await supabase
-      .from("tasks")
-      .select("id, title")
-      .ilike("title", `%${args.title}%`)
-      .eq("completed", false)
-      .eq("line_user_id", lineUserId)
-      .limit(1);
-    if (findError) throw findError;
-    if (!tasks || tasks.length === 0) return { success: false, message: "未完了のタスクが見つかりませんでした" };
-    const updateData = { completed: true };
-    if (args.result) updateData.result = args.result;
-    const { error } = await supabase.from("tasks").update(updateData).eq("id", tasks[0].id);
-    if (error) throw error;
-    return { success: true, title: tasks[0].title, result: args.result || null };
-  }
-
-  if (name === "delete_task") {
-    const { data: tasks, error: findError } = await supabase
-      .from("tasks")
-      .select("id, title")
-      .ilike("title", `%${args.title}%`)
-      .eq("line_user_id", lineUserId)
-      .limit(1);
-    if (findError) throw findError;
-    if (!tasks || tasks.length === 0) return { success: false, message: "タスクが見つかりませんでした" };
-    const { error } = await supabase.from("tasks").delete().eq("id", tasks[0].id);
-    if (error) throw error;
-    return { success: true, title: tasks[0].title };
-  }
-
-  if (name === "update_task") {
-    const { data: tasks, error: findError } = await supabase
-      .from("tasks")
-      .select("id, title")
-      .ilike("title", `%${args.title}%`)
-      .eq("line_user_id", lineUserId)
-      .limit(1);
-    if (findError) throw findError;
-    if (!tasks || tasks.length === 0) return { success: false, message: "タスクが見つかりませんでした" };
-    const updateData = {};
-    if (args.priority) {
-      const validPriorities = ["高", "中", "低"];
-      if (validPriorities.includes(args.priority)) updateData.priority = args.priority;
-    }
-    if (args.due_date !== undefined) {
-      updateData.due_date = args.due_date === "null" ? null : args.due_date;
-    }
-    if (Object.keys(updateData).length === 0) return { success: false, message: "変更する項目がありません" };
-    const { error } = await supabase.from("tasks").update(updateData).eq("id", tasks[0].id);
-    if (error) throw error;
-    return { success: true, title: tasks[0].title, updated: updateData };
-  }
-
-  /* ── 気づき ── */
-  if (name === "add_insight") {
-    const { error } = await supabase
-      .from("insights")
-      .insert({ content: args.content, tags: args.tags || null, line_user_id: lineUserId });
-    if (error) throw error;
-    return { success: true, content: args.content };
-  }
-
-  if (name === "list_insights") {
-    const limit = args.limit || 10;
-    const { data, error } = await supabase
-      .from("insights")
-      .select("id, content, tags, created_at")
-      .eq("line_user_id", lineUserId)
-      .order("created_at", { ascending: false })
-      .limit(limit);
-    if (error) throw error;
-    return { insights: data || [] };
-  }
-
-  if (name === "export_insights_to_dropbox") {
-    const { data, error } = await supabase
-      .from("insights")
-      .select("id, content, tags, created_at")
-      .eq("line_user_id", lineUserId)
-      .is("exported_at", null)
-      .order("created_at", { ascending: true });
-    if (error) throw error;
-
-    if (!data || data.length === 0) {
-      return { success: true, count: 0, message: "未エクスポートの気づきはありません" };
-    }
-
-    const csv = toCSV(data);
-    const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    const filename = `insights_${date}.csv`;
-
-    const dbx = new Dropbox({
-      clientId: process.env.DROPBOX_APP_KEY,
-      clientSecret: process.env.DROPBOX_APP_SECRET,
-      refreshToken: process.env.DROPBOX_REFRESH_TOKEN,
-    });
-
-    const dropboxPath =
-      "/01_Obsidian_vault/01_AI-jissen/03_集中講座/02_supabase(2026.4)/brain-dump-app/insights";
-
-    await dbx.filesUpload({
-      path: `${dropboxPath}/${filename}`,
-      contents: Buffer.from(csv, "utf-8"),
-      mode: { ".tag": "overwrite" },
-    });
-
-    const ids = data.map((r) => r.id);
-    const { error: updateError } = await supabase
-      .from("insights")
-      .update({ exported_at: new Date().toISOString() })
-      .in("id", ids);
-    if (updateError) throw updateError;
-
-    return { success: true, filename, count: data.length };
-  }
-
-  return { error: "unknown tool" };
-}
-
-/* -------------------------------------------------------
  * ハンドラー
  * ----------------------------------------------------- */
 module.exports = async function handler(req, res) {
@@ -330,20 +137,26 @@ module.exports = async function handler(req, res) {
   const { message } = req.body || {};
   if (!message) return res.status(400).json({ error: "message is required" });
 
-  /* ── LINE token 検証 ── */
-  const authHeader = req.headers.authorization || "";
-  const idToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  const idToken = extractBearerToken(req);
   if (!idToken) return res.status(401).json({ error: "認証が必要です（LINEからアクセスしてください）" });
 
-  let lineUserId;
+  let ctx;
   try {
-    lineUserId = await verifyLineToken(idToken);
+    const { verifyLineToken } = require("../lib/line-auth");
+    const lineUserId = await verifyLineToken(idToken);
+    ctx = await resolveMemberContext(lineUserId);
   } catch (e) {
     return res.status(401).json({ error: `認証エラー: ${e.message}` });
   }
 
+  if (!ctx.legacy && ctx.needsOrgSetup && ctx.member.role === "org_admin") {
+    return res.status(403).json({
+      error: "先に組織階層の設定を完了してください（⚙️管理メニュー）",
+    });
+  }
+
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+  const supabase = getSupabaseAdmin();
 
   const today = new Date().toISOString().split("T")[0];
   const week = getWeekRange();
@@ -383,7 +196,7 @@ module.exports = async function handler(req, res) {
       messages.push(assistantMessage);
       for (const toolCall of assistantMessage.tool_calls) {
         const args = JSON.parse(toolCall.function.arguments);
-        const result = await executeTool(supabase, toolCall.function.name, args, lineUserId);
+        const result = await executeTool(supabase, toolCall.function.name, args, ctx);
         if (toolCall.function.name === "list_tasks") {
           taskListData = result.tasks;
         }
@@ -403,8 +216,8 @@ module.exports = async function handler(req, res) {
     /* チャット履歴をDBに保存（失敗しても返答は返す） */
     try {
       await supabase.from("chat_messages").insert([
-        { role: "user", content: message, line_user_id: lineUserId },
-        { role: "bot",  content: reply,   line_user_id: lineUserId },
+        scopedRowData(ctx, { role: "user", content: message }),
+        scopedRowData(ctx, { role: "bot", content: reply }),
       ]);
     } catch (saveErr) {
       console.error("履歴保存エラー:", saveErr);
