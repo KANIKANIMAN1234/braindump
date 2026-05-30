@@ -19,7 +19,29 @@
 -- group by o.name, m.display_name, m.status, m.role, m.line_user_id, t.line_user_id;
 
 -- ---------------------------------------------------------------------------
--- 2. 修正（代表管理者の line_user_id にタスク等を統一）
+-- 2a. members に LINE ID を登録（未登録の代表管理者）
+--     タスクに最も多い line_user_id を採用（同一人物の法人登録前 ID）
+-- ---------------------------------------------------------------------------
+update members m
+set
+  line_user_id = src.line_user_id,
+  status = 'active',
+  activated_at = coalesce(m.activated_at, now())
+from (
+  select line_user_id
+  from tasks
+  where organization_id = '7e47f0b1-34cf-446e-865f-e94fbe793329'
+    and line_user_id is not null
+  group by line_user_id
+  order by count(*) desc
+  limit 1
+) src
+where m.organization_id = '7e47f0b1-34cf-446e-865f-e94fbe793329'
+  and m.role = 'org_admin'
+  and m.line_user_id is null;
+
+-- ---------------------------------------------------------------------------
+-- 2b. タスク・気づき・履歴を代表の line_user_id / member_id に揃える
 -- ---------------------------------------------------------------------------
 update tasks t
 set
