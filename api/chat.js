@@ -143,8 +143,8 @@ module.exports = async function handler(req, res) {
   let ctx;
   try {
     const { verifyLineToken } = require("../lib/line-auth");
-    const lineUserId = await verifyLineToken(idToken);
-    ctx = await resolveMemberContext(lineUserId);
+    const lineProfile = await verifyLineToken(idToken);
+    ctx = await resolveMemberContext(lineProfile.userId);
   } catch (e) {
     return res.status(401).json({ error: `認証エラー: ${e.message}` });
   }
@@ -174,9 +174,10 @@ module.exports = async function handler(req, res) {
 - 気づき・学び・メモの記録と一覧表示
 - 気づきをCSVにしてDropboxへエクスポート
 
+「〇〇のタスクを追加して」「タスクを追加」などの指示は必ず add_task ツールを呼び出して実行すること。
 「〇〇を完了にして」「〇〇を完了」などの指示は必ず complete_task ツールを呼び出して実行すること。
 「〇〇の優先度を△△に変更して」「〇〇の期日を△△にして」などの指示は必ず update_task ツールを呼び出して実行すること。
-ツールを呼ばずに「完了しました」などと返答してはいけない。
+ツールを呼ばずに「追加しました」「完了しました」などと返答してはいけない。
 返答は日本語で、友達に話しかけるようなフランクなトーンにしてください。
 一覧を返すときは箇条書き（・）で表示してください。タスクは「タスク名（期限: MM/DD, 優先度: 高/中/低）」の形式で表示してください。`,
     },

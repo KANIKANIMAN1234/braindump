@@ -1,6 +1,7 @@
 const { getSupabaseAdmin } = require("../lib/supabase-admin");
 const { requireLineMember } = require("../lib/require-member");
-const { applyTasksScope } = require("../lib/data-scope");
+const { applyTasksScope, scopedRowData } = require("../lib/data-scope");
+const { parseDueDateInput } = require("../lib/parse-due-date");
 
 module.exports = async function handler(req, res) {
   const ctx = await requireLineMember(req, res);
@@ -28,6 +29,33 @@ module.exports = async function handler(req, res) {
     if (error) return res.status(500).json({ error: error.message });
 
     return res.status(200).json({ tasks: data || [] });
+  }
+
+  if (req.method === "POST") {
+    const { title, due_date, priority } = req.body || {};
+    const trimmedTitle = String(title || "").trim();
+    if (!trimmedTitle) {
+      return res.status(400).json({ error: "title は必須です" });
+    }
+
+    const validPriorities = ["高", "中", "低"];
+    const prio = validPriorities.includes(priority) ? priority : "中";
+    const parsedDue = due_date ? parseDueDateInput(due_date) : null;
+
+    const row = scopedRowData(ctx, {
+      title: trimmedTitle,
+      due_date: parsedDue,
+      priority: prio,
+    });
+
+    const { data, error } = await supabase
+      .from("tasks")
+      .insert(row)
+      .select("id, title, due_date, priority")
+      .single();
+    if (error) return res.status(500).json({ error: error.message });
+
+    return res.status(201).json({ success: true, task: data });
   }
 
   if (req.method === "PATCH") {

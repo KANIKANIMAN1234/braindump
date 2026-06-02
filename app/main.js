@@ -353,6 +353,26 @@ async function fetchTasks() {
   }
 }
 
+async function addTaskDirect(title, dueDate, priority) {
+  const res = await fetch("/api/tasks", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeader(),
+    },
+    body: JSON.stringify({
+      title,
+      due_date: dueDate || null,
+      priority,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || "タスクの追加に失敗しました");
+  }
+  return data.task;
+}
+
 async function completeTaskById(taskId, result) {
   const res = await fetch("/api/tasks", {
     method: "PATCH",
@@ -572,10 +592,26 @@ async function handleUserInput(text) {
         flowData.priority = value;
         addMessage(value, "user");
         currentState = STATE.IDLE;
-        const due = flowData.dueDate ? `、期限${flowData.dueDate}` : "";
-        await callChat(
-          `「${flowData.title}」のタスクを追加して${due}、優先度は${flowData.priority}`
-        );
+        const typing = addTyping();
+        try {
+          const task = await addTaskDirect(
+            flowData.title,
+            flowData.dueDate,
+            flowData.priority
+          );
+          typing.remove();
+          const dueLabel = task.due_date
+            ? `（期限: ${new Date(task.due_date).getMonth() + 1}/${new Date(task.due_date).getDate()}）`
+            : "";
+          addMessage(
+            `「${task.title}」を追加したよ！📌 優先度: ${task.priority}${dueLabel}`,
+            "bot"
+          );
+        } catch (err) {
+          typing.remove();
+          addMessage(`エラー: ${err.message}`, "bot");
+          console.error(err);
+        }
         setInputEnabled(true);
       }
     );
