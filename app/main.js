@@ -353,6 +353,26 @@ async function fetchTasks() {
   }
 }
 
+async function completeTaskById(taskId, result) {
+  const res = await fetch("/api/tasks", {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeader(),
+    },
+    body: JSON.stringify({
+      id: taskId,
+      action: "complete",
+      result: result || null,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || "タスクの完了に失敗しました");
+  }
+  return data;
+}
+
 function formatTaskLabel(task) {
   const icon = task.priority === "高" ? "🔴" : task.priority === "中" ? "🟡" : "🔵";
   const due = task.due_date
@@ -419,10 +439,12 @@ async function startCompleteFlow() {
 
   addBotMessageWithButtons(
     "完了にするタスクを選んでください✅",
-    tasks.map((t) => ({ label: formatTaskLabel(t), value: t.title })),
-    (value) => {
-      flowData.completeTitle = value;
-      addMessage(value, "user");
+    tasks.map((t) => ({ label: formatTaskLabel(t), value: t.id })),
+    (taskId) => {
+      const task = tasks.find((t) => t.id === taskId);
+      flowData.completeTaskId = taskId;
+      flowData.completeTitle = task ? task.title : taskId;
+      addMessage(flowData.completeTitle, "user");
       currentState = STATE.TASK_COMPLETE_RESULT;
       setInputEnabled(true);
       addMessage("どんな結果でしたか？\n「なし」でスキップもできます", "bot");
@@ -564,8 +586,20 @@ async function handleUserInput(text) {
   if (currentState === STATE.TASK_COMPLETE_RESULT) {
     flowData.completeResult = text === "なし" ? null : text;
     currentState = STATE.IDLE;
-    const resultPart = flowData.completeResult ? `、結果: ${flowData.completeResult}` : "";
-    await callChat(`「${flowData.completeTitle}」を完了にして${resultPart}`);
+    setInputEnabled(false);
+    const typing = addTyping();
+    try {
+      const data = await completeTaskById(flowData.completeTaskId, flowData.completeResult);
+      typing.remove();
+      const resultMsg = flowData.completeResult
+        ? `\n📝 ${flowData.completeResult}`
+        : "";
+      addMessage(`「${data.title}」を完了にしたよ！✅${resultMsg}`, "bot");
+    } catch (err) {
+      typing.remove();
+      addMessage(`エラー: ${err.message}`, "bot");
+      console.error(err);
+    }
     setInputEnabled(true);
     return;
   }
