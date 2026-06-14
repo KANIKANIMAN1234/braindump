@@ -128,6 +128,38 @@ const tools = [
       parameters: { type: "object", properties: {} },
     },
   },
+  /* ── プロンプト ── */
+  {
+    type: "function",
+    function: {
+      name: "add_prompt",
+      description: "AIプロンプトを記録・保存する",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "プロンプトのタイトル（短い名前）" },
+          content: { type: "string", description: "プロンプト本文" },
+          tags: { type: "string", description: "タグ（カンマ区切り）。例: 文章作成,分析" },
+        },
+        required: ["title", "content"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_prompts",
+      description: "保存したプロンプトを一覧取得する",
+      parameters: {
+        type: "object",
+        properties: {
+          limit: { type: "number", description: "取得件数（デフォルト10件）" },
+          tag: { type: "string", description: "タグで絞り込み。カンマ区切りで複数指定可" },
+          tags: { type: "string", description: "tag と同じ。カンマ区切りで複数タグ指定可" },
+        },
+      },
+    },
+  },
 ];
 
 /* -------------------------------------------------------
@@ -166,7 +198,7 @@ module.exports = async function handler(req, res) {
   const messages = [
     {
       role: "system",
-      content: `あなたはタスク管理と日々の気づき記録をサポートするアシスタントです。
+      content: `あなたはタスク管理・日々の気づき記録・プロンプト保存をサポートするアシスタントです。
 今日: ${today}（今週: ${week.start} 〜 ${week.end}）
 
 できること：
@@ -175,11 +207,13 @@ module.exports = async function handler(req, res) {
 - タスクの期日変更（update_task ツールを使う）
 - 気づき・学び・メモの記録と一覧表示
 - 気づきをCSVにしてDropboxへエクスポート
+- AIプロンプトの記録と一覧表示
 
 「〇〇のタスクを追加して」「タスクを追加」などの指示は必ず add_task ツールを呼び出して実行すること。
 「〇〇を完了にして」「〇〇を完了」などの指示は必ず complete_task ツールを呼び出して実行すること。
 「〇〇の優先度を△△に変更して」「〇〇の期日を△△にして」などの指示は必ず update_task ツールを呼び出して実行すること。
 気づきを記録するときは必ず add_insight ツールを呼び出し、メッセージに含まれるタグを tags 引数に渡すこと。タグがない場合は tags を省略すること。
+プロンプトを記録するときは必ず add_prompt ツールを呼び出し、タイトル・本文・タグを引数に渡すこと。
 ツールを呼ばずに「追加しました」「完了しました」などと返答してはいけない。
 返答は日本語で、友達に話しかけるようなフランクなトーンにしてください。
 一覧を返すときは箇条書き（・）で表示してください。タスクは「タスク名（期限: MM/DD, 優先度: 高/中/低）」の形式で表示してください。`,
@@ -199,6 +233,8 @@ module.exports = async function handler(req, res) {
     let taskListData = null;
     let insightListData = null;
     let insightFilterTag = null;
+    let promptListData = null;
+    let promptFilterTag = null;
 
     while (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
       messages.push(assistantMessage);
@@ -221,6 +257,19 @@ module.exports = async function handler(req, res) {
         if (toolCall.function.name === "list_insights") {
           insightListData = result.insights || [];
           insightFilterTag = args.tags || args.tag || null;
+        }
+        if (toolCall.function.name === "add_prompt") {
+          const tagFilter = args.tags || "文章作成";
+          const listResult = await executeTool(supabase, "list_prompts", {
+            limit: 10,
+            tags: tagFilter,
+          }, ctx);
+          promptListData = listResult.prompts || [];
+          promptFilterTag = tagFilter;
+        }
+        if (toolCall.function.name === "list_prompts") {
+          promptListData = result.prompts || [];
+          promptFilterTag = args.tags || args.tag || null;
         }
         messages.push({ role: "tool", tool_call_id: toolCall.id, content: JSON.stringify(result) });
       }
@@ -251,6 +300,10 @@ module.exports = async function handler(req, res) {
       ...(insightListData !== null && {
         insights: insightListData,
         insightTag: insightFilterTag,
+      }),
+      ...(promptListData !== null && {
+        prompts: promptListData,
+        promptTag: promptFilterTag,
       }),
     });
   } catch (err) {

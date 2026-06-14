@@ -22,6 +22,9 @@ const STATE = {
   TASK_UPDATE_DUE_DATE: "task_update_due_date",
   INSIGHT_CONTENT: "insight_content",
   INSIGHT_CATEGORY: "insight_category",
+  PROMPT_TITLE: "prompt_title",
+  PROMPT_CONTENT: "prompt_content",
+  PROMPT_CATEGORY: "prompt_category",
 };
 
 let currentState = STATE.IDLE;
@@ -317,6 +320,10 @@ const TAG_BADGE_CLASS = {
   "学び": "tag-badge-learn",
   "日常": "tag-badge-daily",
   "その他": "tag-badge-other",
+  "文章作成": "tag-badge-writing",
+  "コーディング": "tag-badge-coding",
+  "分析": "tag-badge-analysis",
+  "要約": "tag-badge-summary",
 };
 
 function parseInsightTags(tagsStr) {
@@ -417,6 +424,90 @@ function addInsightListMessage(insights, filterTag = null) {
 }
 
 /* -------------------------------------------------------
+ * タグ付きプロンプトリスト表示
+ * ----------------------------------------------------- */
+function addPromptListMessage(prompts, filterTag = null) {
+  const wrap = document.createElement("div");
+  wrap.className = "msg bot";
+
+  const av = document.createElement("div");
+  av.className = "msg-avatar";
+  av.textContent = "🤖";
+  wrap.appendChild(av);
+
+  const group = document.createElement("div");
+  group.className = "msg-bubble-group";
+
+  const tagLabel = filterTag
+    ? parseInsightTags(filterTag).join(" / ")
+    : null;
+
+  const intro = document.createElement("div");
+  intro.className = "msg-bubble";
+  if (prompts.length === 0) {
+    intro.textContent = tagLabel
+      ? `「${tagLabel}」タグのプロンプトはまだないよ`
+      : "プロンプトはまだないよ";
+  } else {
+    intro.textContent = tagLabel
+      ? `「${tagLabel}」タグのプロンプト ${prompts.length} 件だよ✨`
+      : `プロンプト ${prompts.length} 件だよ✨`;
+  }
+  group.appendChild(intro);
+
+  if (prompts.length > 0) {
+    const listWrap = document.createElement("div");
+    listWrap.className = "prompt-list-bubble";
+
+    prompts.forEach((prompt) => {
+      const item = document.createElement("div");
+      item.className = "prompt-item";
+
+      const tags = parseInsightTags(prompt.tags);
+      if (tags.length > 0) {
+        const tagWrap = document.createElement("div");
+        tagWrap.className = "insight-item-tags";
+        tags.forEach((tag) => {
+          const badge = document.createElement("span");
+          badge.className = `tag-badge ${TAG_BADGE_CLASS[tag] || "tag-badge-other"}`;
+          badge.textContent = tag;
+          tagWrap.appendChild(badge);
+        });
+        item.appendChild(tagWrap);
+      }
+
+      const title = document.createElement("div");
+      title.className = "prompt-item-title";
+      title.textContent = prompt.title;
+
+      const content = document.createElement("div");
+      content.className = "prompt-item-content";
+      content.textContent = truncateText(prompt.content, 80);
+
+      const date = document.createElement("span");
+      date.className = "insight-item-date";
+      date.textContent = formatInsightDate(prompt.created_at);
+
+      item.appendChild(title);
+      item.appendChild(content);
+      item.appendChild(date);
+      listWrap.appendChild(item);
+    });
+
+    group.appendChild(listWrap);
+  }
+
+  const time = document.createElement("div");
+  time.className = "msg-time";
+  time.textContent = nowStr();
+
+  wrap.appendChild(group);
+  wrap.appendChild(time);
+  chatBody.appendChild(wrap);
+  scrollBottom();
+}
+
+/* -------------------------------------------------------
  * API 呼び出し
  * ----------------------------------------------------- */
 async function callChat(message) {
@@ -440,6 +531,9 @@ async function callChat(message) {
       if (data.reply) addMessage(data.reply, "bot");
       if (data.insights !== undefined) {
         addInsightListMessage(data.insights, data.insightTag);
+      }
+      if (data.prompts !== undefined) {
+        addPromptListMessage(data.prompts, data.promptTag);
       }
     }
   } catch (err) {
@@ -509,7 +603,10 @@ function formatTaskLabel(task) {
   return `${icon} ${task.title}${due}`;
 }
 
-async function fetchCategories(content) {
+async function fetchCategories(content, type = "insight") {
+  const defaults = type === "prompt"
+    ? ["文章作成", "コーディング", "分析", "要約", "その他"]
+    : ["仕事", "学び", "アイデア", "日常", "その他"];
   try {
     const res = await fetch("/api/suggest-categories", {
       method: "POST",
@@ -517,12 +614,12 @@ async function fetchCategories(content) {
         "Content-Type": "application/json",
         ...authHeader(),
       },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, type }),
     });
     const data = await res.json();
-    return data.categories || ["仕事", "学び", "アイデア", "日常", "その他"];
+    return data.categories || defaults;
   } catch {
-    return ["仕事", "学び", "アイデア", "日常", "その他"];
+    return defaults;
   }
 }
 
@@ -550,6 +647,13 @@ function startInsightFlow() {
   flowData = {};
   setInputEnabled(true);
   addMessage("気づきを入力してください📝", "bot");
+}
+
+function startPromptFlow() {
+  currentState = STATE.PROMPT_TITLE;
+  flowData = {};
+  setInputEnabled(true);
+  addMessage("プロンプトのタイトルを入力してください✨", "bot");
 }
 
 async function startCompleteFlow() {
@@ -784,6 +888,45 @@ async function handleUserInput(text) {
     );
     return;
   }
+
+  /* ── プロンプト：タイトル入力 ── */
+  if (currentState === STATE.PROMPT_TITLE) {
+    flowData.title = text;
+    currentState = STATE.PROMPT_CONTENT;
+    addMessage("プロンプト本文を入力してください📋", "bot");
+    return;
+  }
+
+  /* ── プロンプト：本文入力 ── */
+  if (currentState === STATE.PROMPT_CONTENT) {
+    flowData.content = text;
+    currentState = STATE.PROMPT_CATEGORY;
+    setInputEnabled(false);
+    const typing = addTyping();
+    const categories = await fetchCategories(
+      `${flowData.title}\n${flowData.content}`,
+      "prompt"
+    );
+    typing.remove();
+    addBotMessageWithButtons(
+      "カテゴリを選んでください（複数選択可）",
+      categories.map((c) => ({ label: c, value: c })),
+      async (selected) => {
+        const tags = Array.isArray(selected) ? selected.join(",") : selected;
+        const label = Array.isArray(selected) && selected.length > 0
+          ? selected.join(" / ")
+          : "なし";
+        addMessage(`カテゴリ: ${label}`, "user");
+        currentState = STATE.IDLE;
+        await callChat(
+          `プロンプトを記録：タイトル「${flowData.title}」、本文「${flowData.content}」${tags ? `、タグ: ${tags}` : ""}`
+        );
+        setInputEnabled(true);
+      },
+      true
+    );
+    return;
+  }
 }
 
 /* -------------------------------------------------------
@@ -980,6 +1123,7 @@ userInput.addEventListener("input", () => {
 
 document.getElementById("qa-task").addEventListener("click", startTaskFlow);
 document.getElementById("qa-insight").addEventListener("click", startInsightFlow);
+document.getElementById("qa-prompt").addEventListener("click", startPromptFlow);
 document.getElementById("qa-list").addEventListener("click", showTaskList);
 document.getElementById("qa-complete").addEventListener("click", startCompleteFlow);
 document.getElementById("qa-update-priority").addEventListener("click", startUpdatePriorityFlow);

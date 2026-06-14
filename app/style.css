@@ -626,6 +626,66 @@ body {
   align-self: flex-end;
 }
 
+/* -------------------------------------------------------
+ * プロンプトリスト
+ * ----------------------------------------------------- */
+.prompt-list-bubble {
+  background: #fff;
+  border-radius: 10px;
+  padding: 0.5rem 0.7rem;
+  margin-top: 0.3rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.prompt-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.86rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.prompt-item:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.prompt-item-title {
+  font-weight: 700;
+  color: #075e54;
+  font-size: 0.88rem;
+}
+
+.prompt-item-content {
+  color: #444;
+  line-height: 1.4;
+  font-size: 0.82rem;
+}
+
+.tag-badge-writing {
+  background: #e8eaf6;
+  color: #3949ab;
+}
+
+.tag-badge-coding {
+  background: #e0f7fa;
+  color: #00695c;
+}
+
+.tag-badge-analysis {
+  background: #fce4ec;
+  color: #c2185b;
+}
+
+.tag-badge-summary {
+  background: #fff8e1;
+  color: #f57f17;
+}
+
 /* ── Phase 2: 組織管理オーバーレイ ── */
 .org-overlay {
   position: fixed;
