@@ -548,6 +548,84 @@ body {
   flex-shrink: 0;
 }
 
+/* -------------------------------------------------------
+ * 気づきリスト（タグバッジ付き）
+ * ----------------------------------------------------- */
+.insight-list-bubble {
+  background: #fff;
+  border-radius: 10px;
+  padding: 0.5rem 0.7rem;
+  margin-top: 0.3rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.insight-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.86rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.insight-item:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.insight-item-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.tag-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.1rem 0.45rem;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.tag-badge-idea {
+  background: #f3e5f5;
+  color: #7b1fa2;
+}
+
+.tag-badge-work {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.tag-badge-learn {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.tag-badge-daily {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.tag-badge-other {
+  background: #f5f5f5;
+  color: #616161;
+}
+
+.insight-item-content {
+  color: #222;
+  line-height: 1.4;
+}
+
+.insight-item-date {
+  font-size: 0.72rem;
+  color: #999;
+  align-self: flex-end;
+}
+
 /* ── Phase 2: 組織管理オーバーレイ ── */
 .org-overlay {
   position: fixed;

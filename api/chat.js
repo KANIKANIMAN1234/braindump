@@ -114,6 +114,8 @@ const tools = [
         type: "object",
         properties: {
           limit: { type: "number", description: "取得件数（デフォルト10件）" },
+          tag: { type: "string", description: "タグで絞り込み（例: アイデア）。カンマ区切りで複数指定可" },
+          tags: { type: "string", description: "tag と同じ。カンマ区切りで複数タグ指定可" },
         },
       },
     },
@@ -177,6 +179,7 @@ module.exports = async function handler(req, res) {
 「〇〇のタスクを追加して」「タスクを追加」などの指示は必ず add_task ツールを呼び出して実行すること。
 「〇〇を完了にして」「〇〇を完了」などの指示は必ず complete_task ツールを呼び出して実行すること。
 「〇〇の優先度を△△に変更して」「〇〇の期日を△△にして」などの指示は必ず update_task ツールを呼び出して実行すること。
+気づきを記録するときは必ず add_insight ツールを呼び出し、メッセージに含まれるタグを tags 引数に渡すこと。タグがない場合は tags を省略すること。
 ツールを呼ばずに「追加しました」「完了しました」などと返答してはいけない。
 返答は日本語で、友達に話しかけるようなフランクなトーンにしてください。
 一覧を返すときは箇条書き（・）で表示してください。タスクは「タスク名（期限: MM/DD, 優先度: 高/中/低）」の形式で表示してください。`,
@@ -194,6 +197,8 @@ module.exports = async function handler(req, res) {
 
     let assistantMessage = response.choices[0].message;
     let taskListData = null;
+    let insightListData = null;
+    let insightFilterTag = null;
 
     while (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
       messages.push(assistantMessage);
@@ -203,6 +208,19 @@ module.exports = async function handler(req, res) {
         if (toolCall.function.name === "list_tasks") {
           const rows = result.tasks || [];
           taskListData = rows.filter((t) => !t.completed);
+        }
+        if (toolCall.function.name === "add_insight") {
+          const tagFilter = args.tags || "アイデア";
+          const listResult = await executeTool(supabase, "list_insights", {
+            limit: 10,
+            tags: tagFilter,
+          }, ctx);
+          insightListData = listResult.insights || [];
+          insightFilterTag = tagFilter;
+        }
+        if (toolCall.function.name === "list_insights") {
+          insightListData = result.insights || [];
+          insightFilterTag = args.tags || args.tag || null;
         }
         messages.push({ role: "tool", tool_call_id: toolCall.id, content: JSON.stringify(result) });
       }
@@ -227,7 +245,14 @@ module.exports = async function handler(req, res) {
       console.error("履歴保存エラー:", saveErr);
     }
 
-    res.status(200).json({ reply, ...(taskListData !== null && { tasks: taskListData }) });
+    res.status(200).json({
+      reply,
+      ...(taskListData !== null && { tasks: taskListData }),
+      ...(insightListData !== null && {
+        insights: insightListData,
+        insightTag: insightFilterTag,
+      }),
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });

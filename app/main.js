@@ -311,6 +311,111 @@ function addTaskListMessage(tasks) {
   scrollBottom();
 }
 
+const TAG_BADGE_CLASS = {
+  "アイデア": "tag-badge-idea",
+  "仕事": "tag-badge-work",
+  "学び": "tag-badge-learn",
+  "日常": "tag-badge-daily",
+  "その他": "tag-badge-other",
+};
+
+function parseInsightTags(tagsStr) {
+  if (!tagsStr) return [];
+  return String(tagsStr)
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
+function formatInsightDate(dateStr) {
+  const d = new Date(dateStr);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+function truncateText(text, maxLen = 60) {
+  const s = String(text || "");
+  return s.length > maxLen ? `${s.slice(0, maxLen)}…` : s;
+}
+
+/* -------------------------------------------------------
+ * タグ付き気づきリスト表示
+ * ----------------------------------------------------- */
+function addInsightListMessage(insights, filterTag = null) {
+  const wrap = document.createElement("div");
+  wrap.className = "msg bot";
+
+  const av = document.createElement("div");
+  av.className = "msg-avatar";
+  av.textContent = "🤖";
+  wrap.appendChild(av);
+
+  const group = document.createElement("div");
+  group.className = "msg-bubble-group";
+
+  const tagLabel = filterTag
+    ? parseInsightTags(filterTag).join(" / ")
+    : null;
+
+  const intro = document.createElement("div");
+  intro.className = "msg-bubble";
+  if (insights.length === 0) {
+    intro.textContent = tagLabel
+      ? `「${tagLabel}」タグの気づきはまだないよ`
+      : "気づきはまだないよ";
+  } else {
+    intro.textContent = tagLabel
+      ? `「${tagLabel}」タグの気づき ${insights.length} 件だよ💡`
+      : `気づき ${insights.length} 件だよ💡`;
+  }
+  group.appendChild(intro);
+
+  if (insights.length > 0) {
+    const listWrap = document.createElement("div");
+    listWrap.className = "insight-list-bubble";
+
+    insights.forEach((insight) => {
+      const item = document.createElement("div");
+      item.className = "insight-item";
+
+      const tags = parseInsightTags(insight.tags);
+      if (tags.length > 0) {
+        const tagWrap = document.createElement("div");
+        tagWrap.className = "insight-item-tags";
+        tags.forEach((tag) => {
+          const badge = document.createElement("span");
+          badge.className = `tag-badge ${TAG_BADGE_CLASS[tag] || "tag-badge-other"}`;
+          badge.textContent = tag;
+          tagWrap.appendChild(badge);
+        });
+        item.appendChild(tagWrap);
+      }
+
+      const content = document.createElement("span");
+      content.className = "insight-item-content";
+      content.textContent = truncateText(insight.content);
+
+      const date = document.createElement("span");
+      date.className = "insight-item-date";
+      date.textContent = formatInsightDate(insight.created_at);
+
+      item.appendChild(content);
+      item.appendChild(date);
+      listWrap.appendChild(item);
+    });
+
+    group.appendChild(listWrap);
+  }
+
+  const time = document.createElement("div");
+  time.className = "msg-time";
+  time.textContent = nowStr();
+
+  wrap.appendChild(group);
+  wrap.appendChild(time);
+  chatBody.appendChild(wrap);
+  scrollBottom();
+}
+
 /* -------------------------------------------------------
  * API 呼び出し
  * ----------------------------------------------------- */
@@ -332,7 +437,10 @@ async function callChat(message) {
     } else if (data.tasks !== undefined) {
       addTaskListMessage(data.tasks);
     } else {
-      addMessage(data.reply, "bot");
+      if (data.reply) addMessage(data.reply, "bot");
+      if (data.insights !== undefined) {
+        addInsightListMessage(data.insights, data.insightTag);
+      }
     }
   } catch (err) {
     typing.remove();
