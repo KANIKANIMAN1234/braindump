@@ -3,7 +3,7 @@
 ## 1. 概要
 
 BrainDump は、LINE公式アカウントのリッチメニューから起動する LIFF Web アプリです。  
-タスク管理と日々の気づき記録をチャット形式で行い、バックエンドは Supabase と OpenAI を利用します。
+タスク管理・日々の気づき記録・**プロンプト保存**をチャット形式で行い、バックエンドは Supabase と OpenAI を利用します。
 
 ## 2. 利用環境
 
@@ -17,7 +17,8 @@ BrainDump は、LINE公式アカウントのリッチメニューから起動す
 
 - タスクの追加 / 一覧 / 完了 / 削除
 - タスクの優先度変更 / 期日変更
-- 気づきメモの記録 / 一覧
+- 気づきメモの記録 / タグ別一覧表示
+- プロンプトの記録 / タグ別一覧表示
 - 気づきの CSV エクスポート（Dropbox）
 - 音声入力（録音 → サーバー文字起こし）
 
@@ -71,10 +72,14 @@ BrainDump は、LINE公式アカウントのリッチメニューから起動す
   タスク/気づき操作を自然言語で実行
 - `GET /api/tasks`  
   タスク一覧取得
+- `POST /api/tasks` / `PATCH /api/tasks`  
+  タスク直接追加・完了
+- `GET /api/prompts` / `POST /api/prompts`  
+  プロンプト一覧・追加
 - `GET /api/messages`  
   直近チャット履歴取得
 - `POST /api/suggest-categories`  
-  気づきカテゴリ候補の提案
+  気づき/プロンプトのカテゴリ候補提案
 - `POST /api/transcribe`  
   音声データの文字起こし
 - `GET /api/config`  
