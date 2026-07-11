@@ -160,6 +160,49 @@ const tools = [
       },
     },
   },
+  /* ── 朝ブリーフィング ── */
+  {
+    type: "function",
+    function: {
+      name: "save_briefing",
+      description: "指定日の朝ブリーフィングを保存する（同日があれば上書き）",
+      parameters: {
+        type: "object",
+        properties: {
+          date: { type: "string", description: "日付（YYYY-MM-DD）。省略時は今日" },
+          content: { type: "string", description: "ブリーフィング本文（要約・今日の焦点）" },
+          task_count: { type: "number", description: "対象タスク件数（未完了数など）" },
+        },
+        required: ["content"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_briefing",
+      description: "指定日の朝ブリーフィングを取得する",
+      parameters: {
+        type: "object",
+        properties: {
+          date: { type: "string", description: "日付（YYYY-MM-DD）。省略時は今日" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_briefings",
+      description: "過去の朝ブリーフィングを一覧取得する",
+      parameters: {
+        type: "object",
+        properties: {
+          limit: { type: "number", description: "取得件数（デフォルト7件）" },
+        },
+      },
+    },
+  },
 ];
 
 /* -------------------------------------------------------
@@ -198,7 +241,7 @@ module.exports = async function handler(req, res) {
   const messages = [
     {
       role: "system",
-      content: `あなたはタスク管理・日々の気づき記録・プロンプト保存をサポートするアシスタントです。
+      content: `あなたはタスク管理・日々の気づき記録・プロンプト保存・朝ブリーフィングをサポートするアシスタントです。
 今日: ${today}（今週: ${week.start} 〜 ${week.end}）
 
 できること：
@@ -208,12 +251,15 @@ module.exports = async function handler(req, res) {
 - 気づき・学び・メモの記録と一覧表示
 - 気づきをCSVにしてDropboxへエクスポート
 - AIプロンプトの記録と一覧表示
+- 朝ブリーフィングの作成・取得・一覧（briefing_logs に保存）
 
 「〇〇のタスクを追加して」「タスクを追加」などの指示は必ず add_task ツールを呼び出して実行すること。
 「〇〇を完了にして」「〇〇を完了」などの指示は必ず complete_task ツールを呼び出して実行すること。
 「〇〇の優先度を△△に変更して」「〇〇の期日を△△にして」などの指示は必ず update_task ツールを呼び出して実行すること。
 気づきを記録するときは必ず add_insight ツールを呼び出し、メッセージに含まれるタグを tags 引数に渡すこと。タグがない場合は tags を省略すること。
 プロンプトを記録するときは必ず add_prompt ツールを呼び出し、タイトル・本文・タグを引数に渡すこと。
+朝ブリーフィングを作成するときは、まず list_tasks（filter: incomplete）で未完了タスクを確認し、今日の要点を300字程度でまとめて save_briefing で保存すること。task_count には未完了タスク数を入れること。
+ブリーフィングを確認・表示するときは get_briefing または list_briefings を使うこと。
 ツールを呼ばずに「追加しました」「完了しました」などと返答してはいけない。
 返答は日本語で、友達に話しかけるようなフランクなトーンにしてください。
 一覧を返すときは箇条書き（・）で表示してください。タスクは「タスク名（期限: MM/DD, 優先度: 高/中/低）」の形式で表示してください。`,
@@ -235,6 +281,8 @@ module.exports = async function handler(req, res) {
     let insightFilterTag = null;
     let promptListData = null;
     let promptFilterTag = null;
+    let briefingData;
+    let briefingListData = null;
 
     while (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
       messages.push(assistantMessage);
@@ -271,6 +319,15 @@ module.exports = async function handler(req, res) {
           promptListData = result.prompts || [];
           promptFilterTag = args.tags || args.tag || null;
         }
+        if (toolCall.function.name === "save_briefing" && result.briefing) {
+          briefingData = result.briefing;
+        }
+        if (toolCall.function.name === "get_briefing") {
+          briefingData = result.briefing || null;
+        }
+        if (toolCall.function.name === "list_briefings") {
+          briefingListData = result.briefings || [];
+        }
         messages.push({ role: "tool", tool_call_id: toolCall.id, content: JSON.stringify(result) });
       }
       response = await openai.chat.completions.create({
@@ -305,6 +362,8 @@ module.exports = async function handler(req, res) {
         prompts: promptListData,
         promptTag: promptFilterTag,
       }),
+      ...(briefingData !== undefined && { briefing: briefingData }),
+      ...(briefingListData !== null && { briefings: briefingListData }),
     });
   } catch (err) {
     console.error(err);

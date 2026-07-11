@@ -424,6 +424,111 @@ function addInsightListMessage(insights, filterTag = null) {
 }
 
 /* -------------------------------------------------------
+ * 朝ブリーフィング表示
+ * ----------------------------------------------------- */
+function formatBriefingDate(dateStr) {
+  if (!dateStr) return "";
+  const [y, m, d] = dateStr.split("-");
+  return `${Number(m)}/${Number(d)}`;
+}
+
+function addBriefingMessage(briefing) {
+  const wrap = document.createElement("div");
+  wrap.className = "msg bot";
+
+  const av = document.createElement("div");
+  av.className = "msg-avatar";
+  av.textContent = "🤖";
+  wrap.appendChild(av);
+
+  const group = document.createElement("div");
+  group.className = "msg-bubble-group";
+
+  const intro = document.createElement("div");
+  intro.className = "msg-bubble";
+  if (!briefing) {
+    intro.textContent = "この日のブリーフィングはまだないよ";
+  } else {
+    const countLabel =
+      briefing.task_count != null ? `（未完了 ${briefing.task_count} 件）` : "";
+    intro.textContent = `🌅 ${formatBriefingDate(briefing.date)} の朝ブリーフィング${countLabel}`;
+  }
+  group.appendChild(intro);
+
+  if (briefing && briefing.content) {
+    const card = document.createElement("div");
+    card.className = "briefing-card";
+    card.textContent = briefing.content;
+    group.appendChild(card);
+  }
+
+  const time = document.createElement("div");
+  time.className = "msg-time";
+  time.textContent = nowStr();
+
+  wrap.appendChild(group);
+  wrap.appendChild(time);
+  chatBody.appendChild(wrap);
+  scrollBottom();
+}
+
+function addBriefingListMessage(briefings) {
+  const wrap = document.createElement("div");
+  wrap.className = "msg bot";
+
+  const av = document.createElement("div");
+  av.className = "msg-avatar";
+  av.textContent = "🤖";
+  wrap.appendChild(av);
+
+  const group = document.createElement("div");
+  group.className = "msg-bubble-group";
+
+  const intro = document.createElement("div");
+  intro.className = "msg-bubble";
+  intro.textContent =
+    briefings.length === 0
+      ? "ブリーフィングの履歴はまだないよ"
+      : `直近のブリーフィング ${briefings.length} 件だよ🌅`;
+  group.appendChild(intro);
+
+  if (briefings.length > 0) {
+    const listWrap = document.createElement("div");
+    listWrap.className = "briefing-list-bubble";
+
+    briefings.forEach((item) => {
+      const row = document.createElement("div");
+      row.className = "briefing-list-item";
+
+      const head = document.createElement("div");
+      head.className = "briefing-list-head";
+      const countLabel =
+        item.task_count != null ? ` · タスク ${item.task_count} 件` : "";
+      head.textContent = `${formatBriefingDate(item.date)}${countLabel}`;
+
+      const body = document.createElement("div");
+      body.className = "briefing-list-content";
+      body.textContent = truncateText(item.content, 120);
+
+      row.appendChild(head);
+      row.appendChild(body);
+      listWrap.appendChild(row);
+    });
+
+    group.appendChild(listWrap);
+  }
+
+  const time = document.createElement("div");
+  time.className = "msg-time";
+  time.textContent = nowStr();
+
+  wrap.appendChild(group);
+  wrap.appendChild(time);
+  chatBody.appendChild(wrap);
+  scrollBottom();
+}
+
+/* -------------------------------------------------------
  * タグ付きプロンプトリスト表示
  * ----------------------------------------------------- */
 function addPromptListMessage(prompts, filterTag = null) {
@@ -534,6 +639,12 @@ async function callChat(message) {
       }
       if (data.prompts !== undefined) {
         addPromptListMessage(data.prompts, data.promptTag);
+      }
+      if (data.briefing !== undefined) {
+        addBriefingMessage(data.briefing);
+      }
+      if (data.briefings !== undefined) {
+        addBriefingListMessage(data.briefings);
       }
     }
   } catch (err) {
@@ -1131,6 +1242,12 @@ document.getElementById("qa-update-due").addEventListener("click", startUpdateDu
 document.getElementById("qa-export").addEventListener("click", async () => {
   addMessage("気づきエクスポート", "user");
   await callChat("気づきをエクスポートして");
+});
+document.getElementById("qa-briefing").addEventListener("click", async () => {
+  addMessage("朝ブリーフィング", "user");
+  await callChat(
+    "朝ブリーフィングを作成して。未完了タスクを確認し、今日の要点をまとめて保存して"
+  );
 });
 
 /* -------------------------------------------------------
