@@ -615,6 +615,16 @@ body {
   color: #616161;
 }
 
+.tag-badge-health {
+  background: #e0f7fa;
+  color: #00838f;
+}
+
+.tag-badge-relationship {
+  background: #fce4ec;
+  color: #ad1457;
+}
+
 .insight-item-content {
   color: #222;
   line-height: 1.4;

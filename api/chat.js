@@ -214,6 +214,7 @@ const tools = [
         properties: {
           date: { type: "string", description: "日付（YYYY-MM-DD）。省略時は今日" },
           content: { type: "string", description: "振り返りの本文" },
+          tags: { type: "string", description: "タグ（カンマ区切り）。例: 仕事,健康" },
         },
         required: ["content"],
       },
@@ -241,8 +242,18 @@ const tools = [
         type: "object",
         properties: {
           limit: { type: "number", description: "取得件数（デフォルト7件）" },
+          tag: { type: "string", description: "タグで絞り込み。カンマ区切りで複数指定可" },
+          tags: { type: "string", description: "tag と同じ。カンマ区切りで複数タグ指定可" },
         },
       },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "export_reflections_to_dropbox",
+      description: "今日の振り返りをCSVにして、気づきエクスポートと同じDropboxの場所へアップロードする",
+      parameters: { type: "object", properties: {} },
     },
   },
 ];
@@ -294,7 +305,7 @@ module.exports = async function handler(req, res) {
 - 気づきをCSVにしてDropboxへエクスポート
 - AIプロンプトの記録と一覧表示
 - 朝ブリーフィングの作成・取得・一覧（briefing_logs に保存）
-- 今日の振り返りの記録・取得・一覧（daily_reflections に保存）
+- 今日の振り返りの記録・取得・一覧（daily_reflections に保存）、CSVでのDropboxエクスポート
 
 「〇〇のタスクを追加して」「タスクを追加」などの指示は必ず add_task ツールを呼び出して実行すること。
 「〇〇を完了にして」「〇〇を完了」などの指示は必ず complete_task ツールを呼び出して実行すること。
@@ -303,8 +314,9 @@ module.exports = async function handler(req, res) {
 プロンプトを記録するときは必ず add_prompt ツールを呼び出し、タイトル・本文・タグを引数に渡すこと。
 朝ブリーフィングを作成するときは、まず list_tasks（filter: incomplete）で未完了タスクを確認し、今日の要点を300字程度でまとめて save_briefing で保存すること。task_count には未完了タスク数を入れること。
 ブリーフィングを確認・表示するときは get_briefing または list_briefings を使うこと。
-「今日の振り返りを記録：〇〇」のように振り返りの記録を依頼されたときは必ず save_reflection ツールを呼び出し、本文をそのまま content 引数に渡すこと（同日にすでに記録があれば上書きされる）。
+「今日の振り返りを記録：〇〇」のように振り返りの記録を依頼されたときは必ず save_reflection ツールを呼び出し、本文をそのまま content 引数に渡し、メッセージに含まれるタグを tags 引数に渡すこと（同日にすでに記録があれば上書きされる）。タグがない場合は tags を省略すること。
 振り返りを確認・表示するときは get_reflection または list_reflections を使うこと。
+「気づきをエクスポートして」は export_insights_to_dropbox、「振り返りをエクスポートして」は export_reflections_to_dropbox を呼び出すこと。「気づきと振り返りをエクスポートして」のように両方求められた場合は両方のツールを呼び出すこと（同じDropboxフォルダに別々のCSVとして保存される）。
 ツールを呼ばずに「追加しました」「完了しました」などと返答してはいけない。
 返答は日本語で、友達に話しかけるようなフランクなトーンにしてください。
 一覧を返すときは箇条書き（・）で表示してください。タスクは「タスク名（期限: MM/DD, 優先度: 高/中/低）」の形式で表示してください。`,

@@ -26,6 +26,7 @@ const STATE = {
   PROMPT_CONTENT: "prompt_content",
   PROMPT_CATEGORY: "prompt_category",
   REFLECTION_CONTENT: "reflection_content",
+  REFLECTION_CATEGORY: "reflection_category",
 };
 
 let currentState = STATE.IDLE;
@@ -325,6 +326,8 @@ const TAG_BADGE_CLASS = {
   "コーディング": "tag-badge-coding",
   "分析": "tag-badge-analysis",
   "要約": "tag-badge-summary",
+  "健康": "tag-badge-health",
+  "人間関係": "tag-badge-relationship",
 };
 
 function parseInsightTags(tagsStr) {
@@ -560,6 +563,20 @@ function addReflectionMessage(reflection) {
   group.appendChild(intro);
 
   if (reflection && reflection.content) {
+    const tags = parseInsightTags(reflection.tags);
+    if (tags.length > 0) {
+      const tagWrap = document.createElement("div");
+      tagWrap.className = "insight-item-tags";
+      tagWrap.style.marginTop = "0.3rem";
+      tags.forEach((tag) => {
+        const badge = document.createElement("span");
+        badge.className = `tag-badge ${TAG_BADGE_CLASS[tag] || "tag-badge-other"}`;
+        badge.textContent = tag;
+        tagWrap.appendChild(badge);
+      });
+      group.appendChild(tagWrap);
+    }
+
     const card = document.createElement("div");
     card.className = "reflection-card";
     card.textContent = reflection.content;
@@ -607,13 +624,26 @@ function addReflectionListMessage(reflections) {
       const head = document.createElement("div");
       head.className = "reflection-list-head";
       head.textContent = formatReflectionDate(item.entry_date);
+      row.appendChild(head);
+
+      const tags = parseInsightTags(item.tags);
+      if (tags.length > 0) {
+        const tagWrap = document.createElement("div");
+        tagWrap.className = "insight-item-tags";
+        tags.forEach((tag) => {
+          const badge = document.createElement("span");
+          badge.className = `tag-badge ${TAG_BADGE_CLASS[tag] || "tag-badge-other"}`;
+          badge.textContent = tag;
+          tagWrap.appendChild(badge);
+        });
+        row.appendChild(tagWrap);
+      }
 
       const body = document.createElement("div");
       body.className = "reflection-list-content";
       body.textContent = truncateText(item.content, 120);
-
-      row.appendChild(head);
       row.appendChild(body);
+
       listWrap.appendChild(row);
     });
 
@@ -825,6 +855,8 @@ function formatTaskLabel(task) {
 async function fetchCategories(content, type = "insight") {
   const defaults = type === "prompt"
     ? ["文章作成", "コーディング", "分析", "要約", "その他"]
+    : type === "reflection"
+    ? ["仕事", "健康", "人間関係", "学び", "その他"]
     : ["仕事", "学び", "アイデア", "日常", "その他"];
   try {
     const res = await fetch("/api/suggest-categories", {
@@ -1157,10 +1189,28 @@ async function handleUserInput(text) {
   /* ── 今日の振り返り入力 ── */
   if (currentState === STATE.REFLECTION_CONTENT) {
     flowData.content = text;
-    currentState = STATE.IDLE;
+    currentState = STATE.REFLECTION_CATEGORY;
     setInputEnabled(false);
-    await callChat(`今日の振り返りを記録：${flowData.content}`);
-    setInputEnabled(true);
+    const typing = addTyping();
+    const categories = await fetchCategories(text, "reflection");
+    typing.remove();
+    addBotMessageWithButtons(
+      "カテゴリを選んでください（複数選択可）",
+      categories.map((c) => ({ label: c, value: c })),
+      async (selected) => {
+        const tags = Array.isArray(selected) ? selected.join(",") : selected;
+        const label = Array.isArray(selected) && selected.length > 0
+          ? selected.join(" / ")
+          : "なし";
+        addMessage(`カテゴリ: ${label}`, "user");
+        currentState = STATE.IDLE;
+        await callChat(
+          `今日の振り返りを記録：${flowData.content}${tags ? `、タグ: ${tags}` : ""}`
+        );
+        setInputEnabled(true);
+      },
+      true
+    );
     return;
   }
 }
@@ -1365,8 +1415,8 @@ document.getElementById("qa-complete").addEventListener("click", startCompleteFl
 document.getElementById("qa-update-priority").addEventListener("click", startUpdatePriorityFlow);
 document.getElementById("qa-update-due").addEventListener("click", startUpdateDueFlow);
 document.getElementById("qa-export").addEventListener("click", async () => {
-  addMessage("気づきエクスポート", "user");
-  await callChat("気づきをエクスポートして");
+  addMessage("気づき/振り返りエクスポート", "user");
+  await callChat("気づきと今日の振り返りをエクスポートして");
 });
 document.getElementById("qa-briefing").addEventListener("click", async () => {
   addMessage("朝ブリーフィング", "user");

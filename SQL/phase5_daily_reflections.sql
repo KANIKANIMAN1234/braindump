@@ -6,6 +6,8 @@ create table if not exists daily_reflections (
   id              uuid        primary key default gen_random_uuid(),
   entry_date      date        not null default current_date,
   content         text        not null,
+  tags            text,
+  exported_at     timestamptz default null,
   line_user_id    text,
   organization_id uuid        references organizations(id) on delete cascade,
   org_unit_id     uuid        references org_units(id) on delete set null,
@@ -13,6 +15,8 @@ create table if not exists daily_reflections (
   created_at      timestamptz default now()
 );
 
+alter table daily_reflections add column if not exists tags text;
+alter table daily_reflections add column if not exists exported_at timestamptz default null;
 alter table daily_reflections add column if not exists line_user_id text;
 alter table daily_reflections add column if not exists organization_id uuid references organizations(id) on delete cascade;
 alter table daily_reflections add column if not exists org_unit_id uuid references org_units(id) on delete set null;
