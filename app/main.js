@@ -25,6 +25,7 @@ const STATE = {
   PROMPT_TITLE: "prompt_title",
   PROMPT_CONTENT: "prompt_content",
   PROMPT_CATEGORY: "prompt_category",
+  REFLECTION_CONTENT: "reflection_content",
 };
 
 let currentState = STATE.IDLE;
@@ -529,6 +530,107 @@ function addBriefingListMessage(briefings) {
 }
 
 /* -------------------------------------------------------
+ * 今日の振り返り表示
+ * ----------------------------------------------------- */
+function formatReflectionDate(dateStr) {
+  if (!dateStr) return "";
+  const [y, m, d] = dateStr.split("-");
+  return `${Number(m)}/${Number(d)}`;
+}
+
+function addReflectionMessage(reflection) {
+  const wrap = document.createElement("div");
+  wrap.className = "msg bot";
+
+  const av = document.createElement("div");
+  av.className = "msg-avatar";
+  av.textContent = "🤖";
+  wrap.appendChild(av);
+
+  const group = document.createElement("div");
+  group.className = "msg-bubble-group";
+
+  const intro = document.createElement("div");
+  intro.className = "msg-bubble";
+  if (!reflection) {
+    intro.textContent = "この日の振り返りはまだないよ";
+  } else {
+    intro.textContent = `📝 ${formatReflectionDate(reflection.entry_date)} の振り返りを記録したよ`;
+  }
+  group.appendChild(intro);
+
+  if (reflection && reflection.content) {
+    const card = document.createElement("div");
+    card.className = "reflection-card";
+    card.textContent = reflection.content;
+    group.appendChild(card);
+  }
+
+  const time = document.createElement("div");
+  time.className = "msg-time";
+  time.textContent = nowStr();
+
+  wrap.appendChild(group);
+  wrap.appendChild(time);
+  chatBody.appendChild(wrap);
+  scrollBottom();
+}
+
+function addReflectionListMessage(reflections) {
+  const wrap = document.createElement("div");
+  wrap.className = "msg bot";
+
+  const av = document.createElement("div");
+  av.className = "msg-avatar";
+  av.textContent = "🤖";
+  wrap.appendChild(av);
+
+  const group = document.createElement("div");
+  group.className = "msg-bubble-group";
+
+  const intro = document.createElement("div");
+  intro.className = "msg-bubble";
+  intro.textContent =
+    reflections.length === 0
+      ? "振り返りの履歴はまだないよ"
+      : `直近の振り返り ${reflections.length} 件だよ📝`;
+  group.appendChild(intro);
+
+  if (reflections.length > 0) {
+    const listWrap = document.createElement("div");
+    listWrap.className = "reflection-list-bubble";
+
+    reflections.forEach((item) => {
+      const row = document.createElement("div");
+      row.className = "reflection-list-item";
+
+      const head = document.createElement("div");
+      head.className = "reflection-list-head";
+      head.textContent = formatReflectionDate(item.entry_date);
+
+      const body = document.createElement("div");
+      body.className = "reflection-list-content";
+      body.textContent = truncateText(item.content, 120);
+
+      row.appendChild(head);
+      row.appendChild(body);
+      listWrap.appendChild(row);
+    });
+
+    group.appendChild(listWrap);
+  }
+
+  const time = document.createElement("div");
+  time.className = "msg-time";
+  time.textContent = nowStr();
+
+  wrap.appendChild(group);
+  wrap.appendChild(time);
+  chatBody.appendChild(wrap);
+  scrollBottom();
+}
+
+/* -------------------------------------------------------
  * タグ付きプロンプトリスト表示
  * ----------------------------------------------------- */
 function addPromptListMessage(prompts, filterTag = null) {
@@ -645,6 +747,12 @@ async function callChat(message) {
       }
       if (data.briefings !== undefined) {
         addBriefingListMessage(data.briefings);
+      }
+      if (data.reflection !== undefined) {
+        addReflectionMessage(data.reflection);
+      }
+      if (data.reflections !== undefined) {
+        addReflectionListMessage(data.reflections);
       }
     }
   } catch (err) {
@@ -765,6 +873,13 @@ function startPromptFlow() {
   flowData = {};
   setInputEnabled(true);
   addMessage("プロンプトのタイトルを入力してください✨", "bot");
+}
+
+function startReflectionFlow() {
+  currentState = STATE.REFLECTION_CONTENT;
+  flowData = {};
+  setInputEnabled(true);
+  addMessage("今日の振り返りを入力してください📝\n（同じ日にもう一度記録すると上書きされます）", "bot");
 }
 
 async function startCompleteFlow() {
@@ -1038,6 +1153,16 @@ async function handleUserInput(text) {
     );
     return;
   }
+
+  /* ── 今日の振り返り入力 ── */
+  if (currentState === STATE.REFLECTION_CONTENT) {
+    flowData.content = text;
+    currentState = STATE.IDLE;
+    setInputEnabled(false);
+    await callChat(`今日の振り返りを記録：${flowData.content}`);
+    setInputEnabled(true);
+    return;
+  }
 }
 
 /* -------------------------------------------------------
@@ -1249,6 +1374,7 @@ document.getElementById("qa-briefing").addEventListener("click", async () => {
     "朝ブリーフィングを作成して。未完了タスクを確認し、今日の要点をまとめて保存して"
   );
 });
+document.getElementById("qa-reflection").addEventListener("click", startReflectionFlow);
 
 /* -------------------------------------------------------
  * メンバー認証（Phase 1: 招待紐づけ / auth/me）

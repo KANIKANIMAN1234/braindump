@@ -203,6 +203,48 @@ const tools = [
       },
     },
   },
+  /* ── 今日の振り返り ── */
+  {
+    type: "function",
+    function: {
+      name: "save_reflection",
+      description: "指定日の振り返りを保存する（同日があれば上書き）",
+      parameters: {
+        type: "object",
+        properties: {
+          date: { type: "string", description: "日付（YYYY-MM-DD）。省略時は今日" },
+          content: { type: "string", description: "振り返りの本文" },
+        },
+        required: ["content"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_reflection",
+      description: "指定日の振り返りを取得する",
+      parameters: {
+        type: "object",
+        properties: {
+          date: { type: "string", description: "日付（YYYY-MM-DD）。省略時は今日" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_reflections",
+      description: "過去の振り返りを一覧取得する",
+      parameters: {
+        type: "object",
+        properties: {
+          limit: { type: "number", description: "取得件数（デフォルト7件）" },
+        },
+      },
+    },
+  },
 ];
 
 /* -------------------------------------------------------
@@ -241,7 +283,7 @@ module.exports = async function handler(req, res) {
   const messages = [
     {
       role: "system",
-      content: `あなたはタスク管理・日々の気づき記録・プロンプト保存・朝ブリーフィングをサポートするアシスタントです。
+      content: `あなたはタスク管理・日々の気づき記録・プロンプト保存・朝ブリーフィング・今日の振り返りをサポートするアシスタントです。
 今日: ${today}（今週: ${week.start} 〜 ${week.end}）
 
 できること：
@@ -252,6 +294,7 @@ module.exports = async function handler(req, res) {
 - 気づきをCSVにしてDropboxへエクスポート
 - AIプロンプトの記録と一覧表示
 - 朝ブリーフィングの作成・取得・一覧（briefing_logs に保存）
+- 今日の振り返りの記録・取得・一覧（daily_reflections に保存）
 
 「〇〇のタスクを追加して」「タスクを追加」などの指示は必ず add_task ツールを呼び出して実行すること。
 「〇〇を完了にして」「〇〇を完了」などの指示は必ず complete_task ツールを呼び出して実行すること。
@@ -260,6 +303,8 @@ module.exports = async function handler(req, res) {
 プロンプトを記録するときは必ず add_prompt ツールを呼び出し、タイトル・本文・タグを引数に渡すこと。
 朝ブリーフィングを作成するときは、まず list_tasks（filter: incomplete）で未完了タスクを確認し、今日の要点を300字程度でまとめて save_briefing で保存すること。task_count には未完了タスク数を入れること。
 ブリーフィングを確認・表示するときは get_briefing または list_briefings を使うこと。
+「今日の振り返りを記録：〇〇」のように振り返りの記録を依頼されたときは必ず save_reflection ツールを呼び出し、本文をそのまま content 引数に渡すこと（同日にすでに記録があれば上書きされる）。
+振り返りを確認・表示するときは get_reflection または list_reflections を使うこと。
 ツールを呼ばずに「追加しました」「完了しました」などと返答してはいけない。
 返答は日本語で、友達に話しかけるようなフランクなトーンにしてください。
 一覧を返すときは箇条書き（・）で表示してください。タスクは「タスク名（期限: MM/DD, 優先度: 高/中/低）」の形式で表示してください。`,
@@ -283,6 +328,8 @@ module.exports = async function handler(req, res) {
     let promptFilterTag = null;
     let briefingData;
     let briefingListData = null;
+    let reflectionData;
+    let reflectionListData = null;
 
     while (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
       messages.push(assistantMessage);
@@ -328,6 +375,15 @@ module.exports = async function handler(req, res) {
         if (toolCall.function.name === "list_briefings") {
           briefingListData = result.briefings || [];
         }
+        if (toolCall.function.name === "save_reflection" && result.reflection) {
+          reflectionData = result.reflection;
+        }
+        if (toolCall.function.name === "get_reflection") {
+          reflectionData = result.reflection || null;
+        }
+        if (toolCall.function.name === "list_reflections") {
+          reflectionListData = result.reflections || [];
+        }
         messages.push({ role: "tool", tool_call_id: toolCall.id, content: JSON.stringify(result) });
       }
       response = await openai.chat.completions.create({
@@ -364,6 +420,8 @@ module.exports = async function handler(req, res) {
       }),
       ...(briefingData !== undefined && { briefing: briefingData }),
       ...(briefingListData !== null && { briefings: briefingListData }),
+      ...(reflectionData !== undefined && { reflection: reflectionData }),
+      ...(reflectionListData !== null && { reflections: reflectionListData }),
     });
   } catch (err) {
     console.error(err);

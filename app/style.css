@@ -677,6 +677,56 @@ body {
 }
 
 /* -------------------------------------------------------
+ * 今日の振り返り
+ * ----------------------------------------------------- */
+.reflection-card {
+  background: linear-gradient(135deg, #ede7f6 0%, #fff 100%);
+  border-left: 4px solid #7e57c2;
+  border-radius: 10px;
+  padding: 0.75rem 0.85rem;
+  margin-top: 0.3rem;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: #333;
+  white-space: pre-wrap;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.reflection-list-bubble {
+  background: #fff;
+  border-radius: 10px;
+  padding: 0.5rem 0.7rem;
+  margin-top: 0.3rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.reflection-list-item {
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.reflection-list-item:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.reflection-list-head {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #7e57c2;
+  margin-bottom: 0.2rem;
+}
+
+.reflection-list-content {
+  font-size: 0.84rem;
+  color: #444;
+  line-height: 1.45;
+}
+
+/* -------------------------------------------------------
  * プロンプトリスト
  * ----------------------------------------------------- */
 .prompt-list-bubble {
